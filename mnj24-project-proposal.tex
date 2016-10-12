@@ -1,0 +1,174 @@
+
+\documentclass[11pt]{scrartcl}
+\usepackage{geometry} % see geometry.pdf on how to lay out the page. There's lots.
+\usepackage[usenames,dvipsnames,svgnames,table]{xcolor}
+\usepackage{graphicx}
+\usepackage{caption}
+\usepackage{setspace}
+\usepackage{enumerate}
+\usepackage{adjustbox}
+\usepackage{tabu}
+\usepackage[T1]{fontenc}
+\usepackage{amsmath}
+\usepackage{ amssymb }
+\usepackage{cutwin}
+%\usepackage{bm}
+\usepackage{url}
+\usepackage{centernot}
+\usepackage{mathtools}
+\usepackage{cancel}
+\usepackage{turnstile}
+\usepackage{pdflscape}
+\usepackage{tikz}
+\usepackage{siunitx}
+\usepackage[full]{textcomp}
+\usepackage[osf]{newpxtext} % osf for text, not math
+\usepackage{cabin} % sans serif
+\usepackage[varqu,varl]{inconsolata} % sans serif typewriter
+\usepackage[bigdelims,vvarbb]{newpxmath} % bb from STIX
+\usepackage[cal=boondoxo]{mathalfa} % mathcal
+
+
+
+\setlength{\oddsidemargin}{-0.4mm}    % 25 mm left margin - 1 in
+\setlength{\evensidemargin}{\oddsidemargin}
+\setlength{\topmargin}{-5.4mm}        % 20 mm top margin - 1 in
+\setlength{\textwidth}{160mm}         % 20/25 mm right margin
+\setlength{\textheight}{237mm}        % 20 mm bottom margin
+\setlength{\headheight}{5mm}
+\setlength{\headsep}{5mm}
+\setlength{\parindent}{0mm}
+\setlength{\parskip}{\medskipamount}
+\renewcommand\baselinestretch{1.2} % thesis format (not needed for techreport)
+% don't let large figures hijack entire pages
+\renewcommand\topfraction{.9}
+\renewcommand\textfraction{.1}
+\renewcommand\floatpagefraction{.8}
+
+\newcommand{\mlpos}{}
+
+\makeatletter
+\DeclareFontFamily{OMX}{MnSymbolE}{}
+\DeclareSymbolFont{MnLargeSymbols}{OMX}{MnSymbolE}{m}{n}
+\SetSymbolFont{MnLargeSymbols}{bold}{OMX}{MnSymbolE}{b}{n}
+\DeclareFontShape{OMX}{MnSymbolE}{m}{n}{
+    <-6>  MnSymbolE5
+   <6-7>  MnSymbolE6
+   <7-8>  MnSymbolE7
+   <8-9>  MnSymbolE8
+   <9-10> MnSymbolE9
+  <10-12> MnSymbolE10
+  <12->   MnSymbolE12
+}{}
+\DeclareFontShape{OMX}{MnSymbolE}{b}{n}{
+    <-6>  MnSymbolE-Bold5
+   <6-7>  MnSymbolE-Bold6
+   <7-8>  MnSymbolE-Bold7
+   <8-9>  MnSymbolE-Bold8
+   <9-10> MnSymbolE-Bold9
+  <10-12> MnSymbolE-Bold10
+  <12->   MnSymbolE-Bold12
+}{}
+
+\let\llangle\@undefined
+\let\rrangle\@undefined
+\DeclareMathDelimiter{\llangle}{\mathopen}%
+                     {MnLargeSymbols}{'164}{MnLargeSymbols}{'164}
+\DeclareMathDelimiter{\rrangle}{\mathclose}%
+                     {MnLargeSymbols}{'171}{MnLargeSymbols}{'171}
+\makeatother
+
+
+% See the ``Article customise'' template for come common customisations
+
+
+%%% BEGIN DOCUMENT
+\begin{document}
+
+\begin{center}
+\Large
+Computer Science Tripos -- Part II -- Project Proposal\\[4mm]
+\LARGE
+An implementation of Google Dataflow in the Elixir programming language\\[4mm]
+
+\large
+M.~N.~Jadczak \texttt{<mnj24>}, Robinson College
+
+Originator: Dr M.~Kleppmann
+
+14 October 2016
+\end{center}
+
+\vspace{5mm}
+
+\textbf{Project Supervisor:} Dr A.~Beresford
+
+\textbf{Director of Studies:} Dr A.~Beresford
+
+\textbf{Project Overseers:} Dr S.~Holden  \& Dr S.~Teufel
+
+% Main document
+
+\section*{Introduction}
+
+\emph{The problem to be addressed.}
+
+\section*{Starting point}
+
+\emph{Describe existing state of the art, previous work in this area,
+  libraries and databases to be used. Describe the state of any
+  existing codebase that is to be built on.}
+
+\section*{Resources required}
+
+\emph{A note of the resources required and confirmation of access.}
+
+\section*{Work to be done}
+
+\emph{Describe the technical work.}
+
+\section*{Success citeria}
+
+\emph{Describe what you expect to be able to demonstrate at the
+end of the project and how you are going to evaluate your achievement.}
+
+
+\section*{Possible extensions}
+
+{\em Potential further envisaged evaluation metrics or extensions.}
+
+
+\section*{Timetable}
+
+\emph{A workplan of perhaps ten or so two-week work-packages,
+as well as milestones to be achieved along the way. Provide a
+target date for each milestone.}
+
+The planned starting date is 17/10/2016. My plan assumes the division of the work into ten work-packages, detailed below:
+
+\begin{enumerate}
+
+\item \textbf{Michaelmas weeks 2--4:}
+
+\item \textbf{Michaelmas weeks 5--6:}
+
+\item \textbf{Michaelmas weeks 7--8:}
+
+\item \textbf{Michaelmas vacation:}
+
+\item \textbf{Lent weeks 0--2:}
+
+\item \textbf{Lent weeks 3--5:} 
+
+\item \textbf{Lent weeks 6--8:}
+
+\item \textbf{Easter vacation:} 
+
+\item \textbf{Easter weeks 0--2:}
+
+\item \textbf{Easter week 3:} 
+
+\end{enumerate}
+
+
+\end{document}
