@@ -1,5 +1,7 @@
 
 \documentclass[11pt]{scrartcl}
+\usepackage[utf8]{inputenc}
+\usepackage[british]{babel}
 \usepackage{geometry} % see geometry.pdf on how to lay out the page. There's lots.
 \usepackage[usenames,dvipsnames,svgnames,table]{xcolor}
 \usepackage{graphicx}
@@ -30,7 +32,8 @@
 \usepackage{hyperref}
 \usepackage[style=ieee]{biblatex}
 
-\bibliography{proposal}
+
+\addbibresource{proposal.bib}
 
 
 
@@ -169,7 +172,7 @@ My project will involve:
 
 Evaluation will be possible against the reference implementation as well as possibly the commercial cloud one if necessary, using publicly accessible data from e.g.\ the Twitter firehose or OpenStreetMaps. Graphs will be produced of the performance characteristics of both systems under varying load size.
 
-Success in this regard will be defined as achieving performance characteristics within an order of magnitude of the reference implementation, including being able to scale up to large loads, both in terms of computation complexity as well as data size.
+Success in this regard will comprise the successful execution of test cases defined during the preparation phase.
 
 As well as comparison of raw performance against the reference implementation, a goal of this project is to provide a much nicer, more natural interface/DSL to the powerful Dataflow model. No external human testing of ``niceness'' will be performed, but success in this area will be achieved by the provision of a well-reasoned argument backed with examples of queries which are easier to write, understand, and better capture the essence of the query itself when written using the Elixir DSL compared to the Java API.
 
@@ -183,32 +186,34 @@ In addition to this, as mentioned in the implementation section, the project wil
 
 \section*{Timetable}
 
-The planned starting date is 17/10/2016. My plan assumes the division of the work into ten work-packages, detailed below:
+The planned starting date is 20/10/2016. My plan assumes the division of the work into ten work-packages, detailed below:
 
 \begin{enumerate}
 
-\item \textbf{Michaelmas weeks 2--4:} Read the source code of the reference implementation and study the paper; achieve familiarity with the concepts and patterns used. Produce notes which will be used for the Preparation section.
+\item \textbf{Michaelmas weeks 2--4. By 02/11/16:} Read the source code of the reference implementation and study the paper; achieve familiarity with the concepts and patterns used. Produce notes which will be used for the Preparation section.
 
-\item \textbf{Michaelmas weeks 5--6:} Identify the exact modules/sections of code which form the necessary vertical slice of features. Produce first iteration of the DSL definition. Continue working on Preparation notes, fleshing them out into a very early draft of the section.
+\item \textbf{Michaelmas weeks 5--6. By 16/11/16:} Identify the exact modules/sections of code which form the necessary vertical slice of features. Produce first iteration of the DSL definition. Continue working on Preparation notes, fleshing them out into a very early draft of the section.
 
-\item \textbf{Michaelmas weeks 7--8:} Write test cases using the reference implementation and make sure they work. Replicate them using the DSL and ensure that the DSL can capture them elegantly and that the selected feature set can support them. Begin implementation. 
+\item \textbf{Michaelmas weeks 7--8. By 30/11/16:} Write test cases using the reference implementation and make sure they work. Replicate them using the DSL and ensure that the DSL can capture them elegantly and that the selected feature set can support them. Begin implementation. 
 
-\item \textbf{Michaelmas vacation:} Work on internal implementation, including the Java wrapper for communication with the runner. Adjust DSL to take the design of the system into account if necessary. Keep notes in prose, forming an early draft of the implementation section.
+\item \textbf{Michaelmas vacation 1. By 21/12/16:} Perform initial internal implementation work, including the Java wrapper for communication with the runner. Adjust DSL to take the design of the system into account if necessary. Keep notes in prose, forming an early draft of the implementation section.
+\item \textbf{Michaelmas vacation 22/12/16--02/01/17:} Take time off.
 
-\item \textbf{Lent weeks 0--2:} Write progress report. Finish internal implementation and implement the DSL itself.
+\item \textbf{Michaelmas vacation 2. By 18/01/17:} Continue work on implementation. Begin writing progress report and implementation of DSL itself.
 
-\item \textbf{Lent weeks 3--5:} Implementation is complete, first evaluation results available, ideally using the test cases defined at the beginning of the project. Ensure these are representative test cases and start writing the draft of the Evaluation section. If necessary, iterate on code implementation if tests are unsatisfactory.
+\item \textbf{Lent weeks 1--2. By 01/02/17:} Write progress report. Finish internal implementation and implement the DSL itself.
 
-\item \textbf{Lent weeks 6--8:} Keep iterating on code, whether to bring it in line with the test spec or to extend its functionality. By the end of the LT the codebase, test cases and any results will be fully complete.
+\item \textbf{Lent weeks 3--5. By 22/02/17:} Implementation is complete, first evaluation results available, ideally using the test cases defined at the beginning of the project. Ensure these are representative test cases and start writing the draft of the Evaluation section. If necessary, iterate on code implementation if tests are unsatisfactory.
 
-\item \textbf{Easter vacation:} Write main body of dissertation, drawing on previous drafts and notes. If time allows work on extensions.
+\item \textbf{Lent weeks 6--8. By 15/03/17:} Keep iterating on code, whether to bring it in line with the test spec or to extend its functionality. By the end of the LT the 
+\item \textbf{Easter vacation 1. By 29/03/17:} Codebase, test cases and any results are be fully complete.
+\item \textbf{Easter vacation 2. By 19/04/17:} Write main body of dissertation, drawing on previous drafts and notes. If time allows work on extensions.
 
-\item \textbf{Easter weeks 0--2:} Submit full first draft to supervisor, implement any comments and suggestions. Aim for early submission.
+\item \textbf{Easter weeks 0--2. By 10/05/17:} Submit full first draft to supervisor on 25/04/17, implement any comments and suggestions. Aim for early submission.
 
-\item \textbf{Easter week 3:} If not yet submitted, finalise all documents and code in preparation for submission.
+\item \textbf{Easter week 3. By 19/05/17:} If not yet submitted, finalise all documents and code in preparation for submission.
 
 \end{enumerate}
 
 \printbibliography
-
 \end{document}
