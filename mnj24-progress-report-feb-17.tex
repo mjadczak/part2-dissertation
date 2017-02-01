@@ -1,0 +1,138 @@
+
+\documentclass[11pt]{scrartcl}
+\usepackage[utf8]{inputenc}
+\usepackage[british]{babel}
+\usepackage{geometry} % see geometry.pdf on how to lay out the page. There's lots.
+\usepackage[usenames,dvipsnames,svgnames,table]{xcolor}
+\usepackage{graphicx}
+\usepackage{caption}
+\usepackage{setspace}
+\usepackage{enumerate}
+\usepackage{adjustbox}
+\usepackage{tabu}
+\usepackage[T1]{fontenc}
+\usepackage{amsmath}
+\usepackage{ amssymb }
+\usepackage{cutwin}
+%\usepackage{bm}
+\usepackage{url}
+\usepackage{centernot}
+\usepackage{mathtools}
+\usepackage{cancel}
+\usepackage{turnstile}
+\usepackage{pdflscape}
+\usepackage{tikz}
+\usepackage{siunitx}
+\usepackage[full]{textcomp}
+\usepackage[osf]{newpxtext} % osf for text, not math
+\usepackage{cabin} % sans serif
+\usepackage[varqu,varl]{inconsolata} % sans serif typewriter
+\usepackage[bigdelims,vvarbb]{newpxmath} % bb from STIX
+\usepackage[cal=boondoxo]{mathalfa} % mathcal
+\usepackage{hyperref}
+\usepackage[style=ieee]{biblatex}
+
+
+
+
+
+
+\setlength{\oddsidemargin}{-0.4mm}    % 25 mm left margin - 1 in
+\setlength{\evensidemargin}{\oddsidemargin}
+\setlength{\topmargin}{-5.4mm}        % 20 mm top margin - 1 in
+\setlength{\textwidth}{160mm}         % 20/25 mm right margin
+\setlength{\textheight}{237mm}        % 20 mm bottom margin
+\setlength{\headheight}{5mm}
+\setlength{\headsep}{5mm}
+\setlength{\parindent}{0mm}
+\setlength{\parskip}{\medskipamount}
+\renewcommand\baselinestretch{1.2} % thesis format (not needed for techreport)
+% don't let large figures hijack entire pages
+\renewcommand\topfraction{.9}
+\renewcommand\textfraction{.1}
+\renewcommand\floatpagefraction{.8}
+
+\newcommand{\mlpos}{}
+
+\makeatletter
+\DeclareFontFamily{OMX}{MnSymbolE}{}
+\DeclareSymbolFont{MnLargeSymbols}{OMX}{MnSymbolE}{m}{n}
+\SetSymbolFont{MnLargeSymbols}{bold}{OMX}{MnSymbolE}{b}{n}
+\DeclareFontShape{OMX}{MnSymbolE}{m}{n}{
+    <-6>  MnSymbolE5
+   <6-7>  MnSymbolE6
+   <7-8>  MnSymbolE7
+   <8-9>  MnSymbolE8
+   <9-10> MnSymbolE9
+  <10-12> MnSymbolE10
+  <12->   MnSymbolE12
+}{}
+\DeclareFontShape{OMX}{MnSymbolE}{b}{n}{
+    <-6>  MnSymbolE-Bold5
+   <6-7>  MnSymbolE-Bold6
+   <7-8>  MnSymbolE-Bold7
+   <8-9>  MnSymbolE-Bold8
+   <9-10> MnSymbolE-Bold9
+  <10-12> MnSymbolE-Bold10
+  <12->   MnSymbolE-Bold12
+}{}
+
+\let\llangle\@undefined
+\let\rrangle\@undefined
+\DeclareMathDelimiter{\llangle}{\mathopen}%
+                     {MnLargeSymbols}{'164}{MnLargeSymbols}{'164}
+\DeclareMathDelimiter{\rrangle}{\mathclose}%
+                     {MnLargeSymbols}{'171}{MnLargeSymbols}{'171}
+\makeatother
+
+
+% See the ``Article customise'' template for come common customisations
+
+
+%%% BEGIN DOCUMENT
+\begin{document}
+
+\begin{center}
+\Large
+Computer Science Tripos -- Part II -- Project Progress Report\\[4mm]
+\LARGE
+An implementation of Google Dataflow in the Elixir programming language\\[4mm]
+
+\large
+M.~N.~Jadczak \texttt{<mnj24@cam.ac.uk>}\\Robinson College
+
+1 February 2017
+\end{center}
+
+\vspace{5mm}
+
+\textbf{Project Supervisor:} Dr A.~Beresford
+
+\textbf{Director of Studies:} Dr A.~Beresford
+
+\textbf{Project Overseers:} Dr S.~Holden  \& Dr S.~Teufel
+
+% Main document
+
+\section*{Overview}
+The project has overall progressed well. Initially, there were many unknowns in the project scope and the exact work to be done, but---as scheduled---extensive research was done to identify the correct direction of the project. Deviations from the schedule/scope are almost entirely caused by this new information resulting from starting the project.
+
+\section*{Change of scope}
+My initial project proposal stated that my project would focus on developing the DSL and pipeline parsing functionality, with execution being delegated to a Java runner. This was based on the assumption that the stated vision of the Beam project, of independence of SDKs and runners, was already actualised.
+
+In fact, the Java SDK is very tightly coupled to the Java reference pipeline runner, and trying to make the 
+original approach work would take up a lot of time with results that would not be worth writing about. Additionally, the ``DSL and pipeline parsing work'' turned out to be easy to implement and was finished much earlier than expect. Therefore, my project now does not directly interface with any of the reference Java code, but rather re\"implements a full Beam SDK and runner in Elixir.
+
+\section*{Work completed}
+The user-facing API of the SDK is completed, using a DSL-like syntax to specify pipeline DAGs. This is parsed into an in-memory representation of the pipeline, which can also be visualised using the \texttt{dot} program or dumped out to a JSON representation. Appropriate program structures allowing users to plug in their custom processing code as well as write their own transforms for the data is also in place.
+
+The runner component is progressing well, with a general framework implemented for executing the pipeline. Currently only linear pipelines that only use global windows are supported (analogous to traditional batch processing systems) but these are executing using a back-pressure demand-driven mechanism to achieve good performance with large datasets. The results are correct (as verified by comparison with the results of the analogous Java pipeline executed on the official runner) and no immediate performance problems are visible (execution is similarly-timed or faster than the reference).
+
+\section*{Work outstanding}
+The framework for a parallelised, backpressure-driven runner is in place, and it remains to implement the various callbacks and transform implementations to support the myriad triggering and windowing options in the Beam Model. Priority will be assigned based on selecting examples to be implemented in the evaluation stage, and implementing the features required to support them. This work should be complete in the coming weeks, paving the way for evaluation and writing-up to begin in March.
+
+\section*{Adherence to original timetable}
+Modulo the scope changes described earlier, the timetable is being adhered to with respect to when the evaluation and writing-up portion of the project may begin. At this point it looks like these can start in March.
+
+
+\end{document}
