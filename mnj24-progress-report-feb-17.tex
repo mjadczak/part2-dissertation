@@ -114,11 +114,14 @@ M.~N.~Jadczak \texttt{<mnj24@cam.ac.uk>}\\Robinson College
 
 % Main document
 
+\section*{Introduction}
+The project goal is to implement a data processing system model known as the Beam Model (previously the Google Dataflow model) in the Elixir language. It is characterised by modelling the data processing in ``pipelines'', which are DAGs specifying how the data should be transformed. Individual data timestamps and ``windows'' (ways of grouping data in time) are tracked as data flows through, making for a very flexible but performant system. The goal of the Beam project is to have the model, the language-specific SDKs used to create the pipelines, and the runners which actually execute the pipelines be decoupled but able to interoperate.
+
 \section*{Overview}
 The project has overall progressed well. Initially, there were many unknowns in the project scope and the exact work to be done, but---as scheduled---extensive research was done to identify the correct direction of the project. Deviations from the schedule/scope are almost entirely caused by this new information resulting from starting the project.
 
 \section*{Change of scope}
-My initial project proposal stated that my project would focus on developing the DSL and pipeline parsing functionality, with execution being delegated to a Java runner. This was based on the assumption that the stated vision of the Beam project, of independence of SDKs and runners, was already actualised.
+My initial project proposal stated that my project would focus on developing a Domain-Specific Language for pipeline specification as well as pipeline construction functionality, with execution being delegated to a Java runner. This was based on the assumption that the stated vision of the Beam project, of independence of SDKs and runners, was already actualised.
 
 In fact, the Java SDK is very tightly coupled to the Java reference pipeline runner, and trying to make the 
 original approach work would take up a lot of time with results that would not be worth writing about. Additionally, the ``DSL and pipeline parsing work'' turned out to be easy to implement and was finished much earlier than expect. Therefore, my project now does not directly interface with any of the reference Java code, but rather re\"implements a full Beam SDK and runner in Elixir.
