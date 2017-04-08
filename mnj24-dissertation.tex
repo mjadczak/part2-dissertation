@@ -9,6 +9,7 @@
 \usepackage{setspace}
 \usepackage{enumerate}
 \usepackage{adjustbox}
+\usepackage{minted}
 \usepackage{tabu}
 \usepackage[T1]{fontenc}
 \usepackage{amsmath}
@@ -33,6 +34,9 @@
 \usepackage[style=ieee]{biblatex}
 \usepackage[capitalise]{cleveref}
 
+
+\usemintedstyle{tango}
+
 \addbibresource{dissertation.bib}
 
 \crefformat{section}{§#2#1#3}
@@ -47,13 +51,23 @@
 \setlength{\headsep}{5mm}
 \setlength{\parindent}{0mm}
 \setlength{\parskip}{\medskipamount}
-\renewcommand\baselinestretch{1.2} % thesis format (not needed for techreport)
+\renewcommand\baselinestretch{1.15} % thesis format (not needed for techreport)
 % don't let large figures hijack entire pages
 \renewcommand\topfraction{.9}
 \renewcommand\textfraction{.1}
 \renewcommand\floatpagefraction{.8}
 
 \newcommand{\mlpos}{}
+
+\newcommand{\exs}[1]{\mintinline{elixir}{#1}}
+
+\newcommand{\todo}[1]{\fcolorbox{red}{white}{\parbox{0.9\textwidth}{\textbf{TODO:} {#1}}}}
+
+\AtBeginEnvironment{minted}{%
+  \renewcommand{\fcolorbox}[4][]{#4}}
+  
+\AtBeginEnvironment{mintinline}{%
+  \renewcommand{\fcolorbox}[4][]{#4}}
 
 \makeatletter
 \DeclareFontFamily{OMX}{MnSymbolE}{}
@@ -86,7 +100,7 @@
                      {MnLargeSymbols}{'171}{MnLargeSymbols}{'171}
 \makeatother
 
-
+\setcounter{tocdepth}{3}
 
 
 
@@ -96,6 +110,8 @@
 \include{00_front_matter}
 
 \include{01_introduction}
+
+\include{02_preparation}
 
 \printbibliography
 

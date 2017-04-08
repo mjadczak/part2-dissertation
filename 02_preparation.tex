@@ -1,0 +1,180 @@
+\chapter{Preparation}\label{ch:prep}
+
+\section{The Elixir programming language (a primer)}\label{sec:prep:elixir}
+
+\todo{Not sure if this is too verbose. Perhaps move this to an appendix. Revisit this depending on how much code there is in the final paper.}
+
+Elixir is a dynamically-typed, functional language which runs on the Erlang VM, which has underpinned mission-critical low-latency, fault-tolerant distributed systems for decades \cite{scalability_erlang_otp}.
+
+This section aims to give a quick primer to the semantics and syntax of Elixir, in order to aid the readability of code snippets in this document.
+The reader is encouraged to explore the language more deeply using the many available resources <references>.
+
+\subsection{Data types}
+Elixir has several basic data types: integers, floats, booleans, atoms, strings, lists, maps and tuples.
+It also has some auxiliary types used in the concurrency and messaging model.
+The only important one of those is the pid type, which uniquely identifies processes in a cluster, allowing us to send them messages.
+
+Integers follow the usual syntax, and are arbitrarily sized---this is similar to how e.g.\ a \verb|BigInteger| object in Java would behave.
+
+Floating point numbers are always 64-bit double precision floats.
+
+Atoms, denoted for example \exs{:foo}, \exs{:foo_bar}, \exs{:"arbitrary @ string"} are essentially indexed strings---they allow for a convenient representation in code but are turned into integers (indices into an atom table) at code load-time, allowing for very fast comparisons.
+As such, they are very heavily used for things like map keys, constants and places where other languages might use something like an enumeration type.
+
+Booleans, the usual \exs{true} and \exs{false}, are actually just the atoms \exs{:true} and \exs{:false}, though the keywords can be used plain for convenience.
+
+The value \exs{nil} is a similar case---the keywords simply denotes the atom \exs{:nil}.
+This value has no special behaviour in the language, but is used by convention to denote an empty result or other missing data.
+
+Tuples are an essential part of the language and are used extensively.
+They are denoted with curly brackets, as \exs{{1, :second, "third"}} and can have arbitrary length.
+
+As Elixir is a functional language, lists are a fundamental datatype for data processing.
+They are denoted with the conventional syntax \exs{[1, 2, 3]}.
+Existing lists can be consed onto: \exs{[1, 2 | tail]}.
+The tail is not type-checked in this process, and it is technically possible to construct improper lists (\exs{[1 | 2
+]}) but this is not generally done.
+The elements of a list do not have to all be the same type.
+
+A common construct in the Erlang / Elixir ecosystem is a keyword list---a list of two-tuples with an atom (the key) as the first element, and an arbitrary value as the second element: \exs{[{:option_1, 4}, {:option_2, "foo"}]}.
+Functions with many optional arguments will typically take such a keyword list as the last argument.
+In fact, this construct is so common that Elixir provides syntax sugar for it---the previous example can be written as \exs{[option_1: 4, option_2: "foo"]}.
+
+Maps are values which store key-value data.
+Neither all keys nor all values need be the same type.
+A map is denoted as
+\begin{minted}{elixir}
+%{
+  12 => "value",
+  "key" => :value,
+  :another_key => 67
+}	
+\end{minted}
+however there is a convenience syntax for maps with only atom keys:
+\begin{minted}{elixir}
+%{
+  key_1: 5,
+  key_2: 12
+}	
+\end{minted}
+
+String in Elixir are denoted with a double quote: \exs{"Hello World"}.
+They are represented as UTF-8 encoded binaries.
+Binaries are an Erlang VM-specific data type which can store arbitrary binary data and allow powerful transformations at the bit and byte level.
+Strings in Elixir support interpolation of arbitrary expressions: \exs{"Hello #{name}"} will evaluate to \exs{"Hello Bob"} if \exs{name} is bound to \exs{"Bob"} in the current context.
+
+There are also single-quoted strings, which are mostly used to interface with Erlang code.
+In Erlang, strings are represented as lists of integers, with the integer representing the ASCII-code of each character.
+
+\subsection{Modules and functions}
+
+Code in Elixir is organised in units called modules.
+An example module is given below.
+
+\begin{minted}{elixir}
+defmodule HelloWorld do
+  def say_hello(name \\ "World") do
+    IO.puts "Hello #{get_name(name)}!"
+  end
+  
+  defp get_name(name), do: name
+end	
+\end{minted}
+
+\todo{explain syntax features.}
+
+\subsection{Pattern matching}
+
+\subsection{Function pipelining}
+
+\section{The Dataflow Model explained}\label{sec:prep:dataflow}
+
+As mentioned in \cref{sec:intro:motivation}, the main feature of the Dataflow model is flexibility.
+It aims to create a unified model of data processing which can encompass other processes, placing them in a well-defined structure and allowing the efficient execution of such systems.
+
+It does this by separating the logical notion of data processing from the underlying physical implementation.
+An abstract data processing model is defined which covers existing modes of processing by allowing the orthogonal specification of \textbf{what} results are being computed, \textbf{where} in event time they are being computed, \textbf{when} in processing time they are materialised, and \textbf{how} earlier results relate to later refinements \cite[p.~1793]{Akidau:2015}.
+
+This standard model can then be implemented and realised by many different runners, whether natively batch, streaming or hybrid, each with its own set of advantages and disadvantages. 
+This flexible approach allows for the tuning of execution technology to business requirements while working with a consistent, expressive theoretical model of the processing itself.
+
+The key takeaway is that this model tries to make as few assumptions as possible on the data inputs, outputs and processes, instead providing simple primitives from which complex system can be constructed.
+
+What follows is a descriptions of the primitive concepts used in the model to more precisely specify all of these properties.
+
+\subsection{``The What'': Transforms and pipelines}
+
+In the Dataflow model, a \emph{pipeline} is an entire data processing flow.
+It may incorporate many different \emph{transforms} which pass data between each other, processing and transforming it as it flows through them.
+One can think of pipelines as DAGs\footnote{Directed Acyclic Graphs}, with nodes representing transforms and edges representing the data flowing between them.
+
+\todo{Diagrams of pipelines}
+
+The graph does not have to be connected---it is valid for there to be multiple disjoint data processing paths.
+A given transform may produce multiple outputs and it may take in multiple inputs.
+It can also produce no outputs, instead causing a side effect such as writing to the network, database or file system.
+Transforms can also have no inputs in the graph, instead receiving output from an external source or generating it.
+These transforms are called root transforms.
+
+A key advantage of expressing transforms in terms of data flowing is the natural adaptation of the system to unbounded data.
+When we say unbounded data, we mean data which may not necessarily have an end.
+An example of this may be a stream of events from a website, or the Twitter firehose.
+It may help to think of unbounded data as ``streaming'' data, but ``streaming'' and ''batch'' imply execution strategies as opposed to data properties.
+Further, in the Dataflow Model it is more convenient to think of all data as being streamed, whether that is a true infinite stream, or merely data being streamed out of a file.
+
+All transforms can be represented fundamentally using only two primitives: \verb|ParDo| and \verb|GroupByKey|\footnotemark[2].
+
+\footnotetext[2]{
+Even though these transforms are the only primitives mentioned in the original description of the Model \cite[§2.1]{Akidau:2015}, real implementation will likely special-case several other transforms such as \texttt{AssignTimestamps} or \texttt{Window} and make them primitives for architectural or performance reasons.
+}
+
+\todo{diagrams of the transformations performed by these}
+
+\verb|ParDo| represents a flat-map operation---it transforms a data element into zero or more data elements.
+The actual computation performed can be arbitrary---the only restriction is that the output depends only on the single element being processed.
+This restriction means that the \verb|ParDo| step is ``embarrassingly parallelisable''.
+It also translates naturally to operating on unbounded data, as we can emit the output in real-time.
+
+\verb|GroupByKey|, on the other hand, simply groups all key-value pairs into elements with a single key and a collection of elements.
+It needs to collect \emph{all} of the data for a particular key before being able to emit its output.
+An issue arises when dealing with unbounded data---how do we know when we've received all of the input for a particular key?
+
+To deal with this problem, the Dataflow model introduces a concept of windowing.
+
+\subsection{``The Where'': Windowing}
+
+\subsection{``The When'': Watermarks and triggers}
+
+\subsection{``The How'': Retractions}
+
+\section{A survey of the Apache Beam project}\label{sec:prep:beam}
+
+\section{Implementation approach}\label{sec:prep:implementation}
+
+\subsection{From objects to actors}
+
+\subsubsection{Making state explicit and exposing hidden assumptions}
+
+\subsubsection{Managing concurrency with OTP and GenServers}
+
+\subsubsection{The GenStage library}
+
+\subsection{What the paper doesn't tell you: implementation strategies}
+
+\subsubsection{Managing time}
+
+\subsubsection{Windows, panes, triggers, timers and holds}
+
+\subsubsection{``Lateness'' and its semantics}
+
+\subsubsection{Bundling values: the fine line between streaming and micro-batch}
+
+\section{Software Engineering approach}\label{sec:prep:softeng}
+
+\subsection{Changing goals and assumptions}
+
+\subsection{The spiral model}
+
+\subsection{Testing approach}
+
+\section{Summary}\label{sec:prep:summary}

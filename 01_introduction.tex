@@ -1,12 +1,5 @@
 \chapter{Introduction}\label{ch:intro}
 
-This chapter aims to provide a brief exposition of the problem domain and the challenges faced within, as well as introduce the ideas used throughout this project.
-
-\Cref{sec:intro:background} explains the fundamental problem faced in data processing today, while \cref{sec:intro:motivation} describes how the Dataflow Model uniquely aims to provide a solution.
-In \cref{sec:intro:elixir}, the choice of Elixir as the implementation language is justified.
-
-\Cref{sec:intro:previous} provides a brief survey of work previously completed in the areas touched upon by the project, and \cref{sec:intro:terminology} establishes terminology conventions which will be used throughout the paper, to avoid confusion. 
-
 \section{Background}\label{sec:intro:background}
 
 In today's fast-moving world of technology, data is king.
@@ -40,20 +33,12 @@ This section simply aims to set out the core motivation behind the model, answer
 Simply put, the Dataflow Model aims to provide a unified way of thinking about data processing, producing a clear, composable abstraction.
 It acknowledges the fact that it is impossible to design a perfect (always correct, low-latency and cheap) system, and instead it allows for tunability across these characteristics.
 
-It does this by separating the logical notion of data processing from the underlying physical implementation.
-An abstract data processing model is defined which covers all of the existing modes of processing by allowing the orthogonal specification of \textbf{what} results are being computed, \textbf{where} in event time they are being computed, \textbf{when} in processing time they are materialised, and \textbf{how} earlier results relate to later refinements \cite[p. 1793]{Akidau:2015}.
-
-This standard model can then be implemented and realised by many different runners, whether natively batch, streaming or hybrid, each with its own set of advantages and disadvantages. 
-This flexible approach allows for the tuning of execution technology to business requirements while working with a consistent, expressive theoretical model of the processing itself.
-
-The key takeaway is that this model tries to make as few assumptions as possible on the data inputs, outputs and processes, instead providing simple primitives from which complex system can be constructed.
-
 \Cref{sec:prep:dataflow} dives deep into the model itself and explains how these aims are achieved, while \cref{ch:impl} contains a detailed overview of the implementation of the model in practice.
 
 \section{Why Elixir?}\label{sec:intro:elixir}
 
 The Elixir language \cite{Elixir} is relatively young (with v1.0 released less than three years ago).
-A brief survey of popular applications of it reveals that it is most popular in the web development circles, with many treating it as a Ruby replacement.
+A brief survey of its popular applications reveals that it is most popular in the web development circles, with many treating it as a Ruby replacement.
 How then is this a suitable language in which to implement a robust, complex data processing system?
 
 The answer lies in the underpinnings of the language.
@@ -76,8 +61,11 @@ Initially, Google released the Google Cloud Dataflow product \cite{CloudDataflow
 
 In early 2016, Google decided to open-source the project and place it under the care of the Apache Foundation \cite{ApacheDataflowPost}.
 This marked the beginning of Apache Beam, a project whose goals were even wider.
+
 One of its main aims was to realise the goal of allowing multiple interchangeable runners to be used from the same SDK, as well as supporting the existence of various compatible SDKs written in different languages.
-They have made excellent progress on these fronts, with a fully-featured SDK written in Java (used as the reference implementation for this project) as well as an actively-developed Python SDK.
+Each such ``runner'' would be able to take the pipelines created with the SDK and execute them using its own backend, in a way which allows the user to be agnostic of the backend infrastructure.
+
+The project has made excellent progress on these fronts, with a fully-featured SDK written in Java (used as the reference implementation for this project) as well as an actively-developed Python SDK.
 There are also various runners for a multitude of data-processing products such as Apache Spark, Apache Storm, Apache Flink and others.
 Google Cloud Dataflow remains a paid product capable of running Apache Beam pipelines at scale, but is now only one of many options for doing so.
 
@@ -89,7 +77,7 @@ Notably, in the Elixir ecosystem, the Flow project \cite{ElixirFlow} takes some 
 
 While the goals and design of Flow are much more narrow than a general Dataflow Model implementation, it itself has driven the development of GenStage \cite{ElixirGenStage}, a more low-level library implementing demand-driven data flow between actor processes, along with an extensible way to route, partition and dispatch that data.
 GenStage forms the backbone of the execution logic in this project, and it is described in more detail in \cref{sec:prep:genstage}.
-\newpage
+
 \section{Terminology}\label{sec:intro:terminology}
 
 There are several similar and overlapping terms employed in this document, due to various naming conflicts and naming changes\footnotemark.
@@ -108,6 +96,4 @@ The approach taken in this paper is to refer to the theoretical model described 
 
 Further, the virtual machine which powers Erlang and Elixir is called the BEAM.
 While efforts are made to refer to the conflicting software in full as the BEAM VM and Apache Beam, the reader should note that wherever the virtual machine is being referred to, BEAM appears in all-uppercase form.
-
-With this in mind, let us proceed to an overview of the preparatory work undertaken as part of this project.
 
