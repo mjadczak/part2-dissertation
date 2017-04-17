@@ -2,90 +2,9 @@
 
 \section{The Elixir programming language (a primer)}\label{sec:prep:elixir}
 
-\todo{Not sure if this is too verbose. Perhaps move this to an appendix. Revisit this depending on how much code there is in the final paper.}
+\subsection{Language basics}
 
-Elixir is a dynamically-typed, functional language which runs on the Erlang VM, which has underpinned mission-critical low-latency, fault-tolerant distributed systems for decades \cite{scalability_erlang_otp}.
-
-This section aims to give a quick primer to the semantics and syntax of Elixir, in order to aid the readability of code snippets in this document.
-The reader is encouraged to explore the language more deeply using the many available resources <references>.
-
-\subsection{Data types}
-Elixir has several basic data types: integers, floats, booleans, atoms, strings, lists, maps and tuples.
-It also has some auxiliary types used in the concurrency and messaging model.
-The only important one of those is the pid type, which uniquely identifies processes in a cluster, allowing us to send them messages.
-
-Integers follow the usual syntax, and are arbitrarily sized---this is similar to how e.g.\ a \verb|BigInteger| object in Java would behave.
-
-Floating point numbers are always 64-bit double precision floats.
-
-Atoms, denoted for example \exs{:foo}, \exs{:foo_bar}, \exs{:"arbitrary @ string"} are essentially indexed strings---they allow for a convenient representation in code but are turned into integers (indices into an atom table) at code load-time, allowing for very fast comparisons.
-As such, they are very heavily used for things like map keys, constants and places where other languages might use something like an enumeration type.
-
-Booleans, the usual \exs{true} and \exs{false}, are actually just the atoms \exs{:true} and \exs{:false}, though the keywords can be used plain for convenience.
-
-The value \exs{nil} is a similar case---the keywords simply denotes the atom \exs{:nil}.
-This value has no special behaviour in the language, but is used by convention to denote an empty result or other missing data.
-
-Tuples are an essential part of the language and are used extensively.
-They are denoted with curly brackets, as \exs{{1, :second, "third"}} and can have arbitrary length.
-
-As Elixir is a functional language, lists are a fundamental datatype for data processing.
-They are denoted with the conventional syntax \exs{[1, 2, 3]}.
-Existing lists can be consed onto: \exs{[1, 2 | tail]}.
-The tail is not type-checked in this process, and it is technically possible to construct improper lists (\exs{[1 | 2
-]}) but this is not generally done.
-The elements of a list do not have to all be the same type.
-
-A common construct in the Erlang / Elixir ecosystem is a keyword list---a list of two-tuples with an atom (the key) as the first element, and an arbitrary value as the second element: \exs{[{:option_1, 4}, {:option_2, "foo"}]}.
-Functions with many optional arguments will typically take such a keyword list as the last argument.
-In fact, this construct is so common that Elixir provides syntax sugar for it---the previous example can be written as \exs{[option_1: 4, option_2: "foo"]}.
-
-Maps are values which store key-value data.
-Neither all keys nor all values need be the same type.
-A map is denoted as
-\begin{minted}{elixir}
-%{
-  12 => "value",
-  "key" => :value,
-  :another_key => 67
-}	
-\end{minted}
-however there is a convenience syntax for maps with only atom keys:
-\begin{minted}{elixir}
-%{
-  key_1: 5,
-  key_2: 12
-}	
-\end{minted}
-
-String in Elixir are denoted with a double quote: \exs{"Hello World"}.
-They are represented as UTF-8 encoded binaries.
-Binaries are an Erlang VM-specific data type which can store arbitrary binary data and allow powerful transformations at the bit and byte level.
-Strings in Elixir support interpolation of arbitrary expressions: \exs{"Hello #{name}"} will evaluate to \exs{"Hello Bob"} if \exs{name} is bound to \exs{"Bob"} in the current context.
-
-There are also single-quoted strings, which are mostly used to interface with Erlang code.
-In Erlang, strings are represented as lists of integers, with the integer representing the ASCII-code of each character.
-
-\subsection{Modules and functions}
-
-Code in Elixir is organised in units called modules.
-An example module is given below.
-
-\begin{minted}{elixir}
-defmodule HelloWorld do
-  def say_hello(name \\ "World") do
-    IO.puts "Hello #{get_name(name)}!"
-  end
-  
-  defp get_name(name), do: name
-end	
-\end{minted}
-
-\todo{explain syntax features.}
-
-\subsection{Pattern matching}
-
-\subsection{Function pipelining}
+\subsection{Concurrency model and the OTP framework}
 
 \section{The Dataflow Model explained}\label{sec:prep:dataflow}
 
@@ -102,7 +21,7 @@ The key takeaway is that this model tries to make as few assumptions as possible
 
 What follows is a descriptions of the primitive concepts used in the model to more precisely specify all of these properties.
 
-\subsection{``The What'': Transforms and pipelines}
+\subsection{``The What'': Transforms and pipelines}\label{sec:prep:dataflow:what}
 
 In the Dataflow model, a \emph{pipeline} is an entire data processing flow.
 It may incorporate many different \emph{transforms} which pass data between each other, processing and transforming it as it flows through them.
@@ -143,7 +62,7 @@ To deal with this problem, the Dataflow Model introduces a concept of windowing.
 
 \todo{somewhere we need an explanation of elements' structure as they flow through the pipeline.}
 
-\subsection{``The Where'': Windowing}
+\subsection{``The Where'': Windowing}\label{sec:prep:dataflow:where}
 
 Windowing simply means the additional grouping of elements according to their timestamps in a way which allows us to emit a particular chunk of elements when we know that we have all the data for it.
 In the Dataflow Model, we call such a chunk of data belonging to a particular window a \emph{pane}.
@@ -189,7 +108,7 @@ Not all windowing functions take advantage of this, and in fact the common strat
 
 \todo{show an example of the two functions being used to effect session-based windowing}
 
-\subsection{``The When'': Watermarks and triggers}
+\subsection{``The When'': Watermarks and triggers}\label{sec:prep:dataflow:when}
 
 In the previous section, we have defined a way to group elements together into windows.
 We have also asserted that we can ``emit a particular chunk of elements when we know that we have all the data for it''.
@@ -211,7 +130,7 @@ This is explored further in \cref{sec:prep:dataflow_extra:lateness}.
 
 The reader may at this point be asking, ``where does the watermark come from?''
 Watermarks in the Dataflow Model are heuristics generated by sources of data, or by user logic in the pipeline.
-Their exact behaviour is touched upon in \cref{sec:prep:dataflow_extra:lateness,sec:prep:todo}.
+The exact behaviour is described in \cref{sec:impl:dataflow}.
 
 \subsubsection{Triggering model}
 
@@ -241,7 +160,7 @@ A key strength is that it decouples the marking of data as early/tentative, on t
 
 \todo{one sentence conclusion of triggering / windowing}
 
-\subsection{``The How'': Refinements and retractions}
+\subsection{``The How'': Refinements and retractions}\label{sec:prep:dataflow:how}
 
 While the concepts defined so far allow us to specify when panes should be emitted, we haven't yet settled on what their contents should be, exactly.
 We do this by selecting from one of the three refinement modes for a particular \verb|GroupByKey| transform:
@@ -292,64 +211,28 @@ In fact, much of its functionality is in a separate ``Core'' module, which conta
 This runner is crucial for this project, as it is the result of many man-years of work to come up with a practical implementation of the Dataflow Model while keeping with its definition.
 It is the runner whose main focus is model correctness, and as such it is the most appropriate to take as a reference implementation for a project which aims to explore the Dataflow Model, such as this one.
 
-A side-effect of the way the project has developed, however, is that a large amount of further development to the theory of the model has occurred implicitly while developing this runner.
+
+\section{Changing goals}
+
+A side-effect of the way the Dataflow/Beam project has developed is that a large amount of development of the theory of the model has occurred implicitly while the software was worked on.
 This happened in place of a formal definition of many concepts, a large amount of which were sketched out in proposals for the project and then iterated upon in code.
 
 Therefore, a huge part of this project was the extraction and reverse-engineering of these concepts from the Java codebase into a more formal specification.
 This was further necessitated by the move from an OOP to a functional approach, requiring each concept to be reduced to what it is in the abstract rather than just transferring the class hierarchy to a new language.
 
+The initial project goals did not account for this---it was assumed that a reasonable implementation could be produced from the Dataflow paper \cite{Akidau:2015} using the Beam code simply as reference.
 
 
-\section{The Dataflow Model extended: what the paper doesn't tell you}\label{sec:prep:dataflow_extra}
+\section{Software Engineering methods}\label{sec:prep:softeng}
 
-\todo{Maybe this section should all go into implementation? It's the work done while trawling through the Beam code, concurrently with writing my own.}
+\subsection{The spiral model}
 
-\subsection{Managing time}
-
-\todo{Actually, the previous section talked about time domains etc. Details of a separate process managing time per transform should go into the implementation.}
-
-\subsection{Windows, panes, triggers, timers and holds}
-
-\todo{Arguably, windows, panes and triggers were already introduced in enough detail. Describe timers and watermark holds more thoroughly. This may end up getting merged with the next subsection.}
-
-\subsection{``Lateness'' and its semantics}\label{sec:prep:dataflow_extra:lateness}
-
-\todo{Write up existing notes on lateness.}
-
-\subsection{Bundling values: the fine line between streaming and micro-batch}
-
-\todo{Short section on the different approaches which can be taken by runners. How the Java implementation uses bundled to group elements. How the Elixir implementation considers any data a continuous stream, but how the data is actually processed in chunks. Refer to (hopefully) more robust timing diagram in the implementation section.}
-
-\section{Implementation approach: from objects to actors}\label{sec:prep:implementation}
-
-\todo{consider moving this to implementation.}
-
-\subsection{Making state explicit and exposing hidden assumptions}
-
-\todo{discuss moving from a stateful approach where things can just grab state out of thin air and mutate it, into an explicit approach of functions taking state and returning a modified version of the state. Also expand on how this forces greater focus on what a particular function actually does as it needs to explicitly receive things it needs, and explicitly return things it touches/modifies.}
-
-\subsection{Managing concurrency with OTP and GenServers}
-
-\todo{Introduce the concept of OTP, GenServers and how they provide robust, serialised concurrency. Make clear how building on top of these core libraries is advantageous and appropriate. Mention how clear semantics enable concurrency design.}
-
-\subsection{The GenStage library}
-
-\todo{Introduce concept of GenStage and how it builds on GenServer. Mention how its operation is a great fit for the type of computation being done in Dataflow.}
-
-\section{Software Engineering approach}\label{sec:prep:softeng}
-
-\subsection{Changing goals and assumptions}
-
-A key point to note is that the project involved building and implementing the software concurrently with actually discovering its requirements.
-As mentioned in \cref{sec:prep:dataflow_extra}, a huge amount of key concepts and logic had to be reverse-engineered from a massive Java codebase, or put together from discussions on mailing lists and issue trackers.
 
 This resulted in a need for a highly adaptive and agile development process, since fundamental assumptions made initially changed many times over.
 
 \todo{give actual examples of this happening maybe?}
 
 The Elixir language, with its clear modular structure combined with writing simple, composable functions enabled a flexible model where key logic in the codebase could be refactored with ease when needed.
-
-\subsection{The spiral model}
 
 \todo{summarise spiral model, refer to previous subsection as to why it's good. Include a diagram.}
 

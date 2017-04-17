@@ -70,7 +70,7 @@
 
 \newcommand{\exs}[1]{\mintinline{elixir}{#1}}
 
-\newcommand{\todo}[1]{\fcolorbox{red}{white}{\parbox{0.9\textwidth}{\textbf{TODO:} {#1}}}}
+\newcommand{\todo}[1]{\fcolorbox{red}{white}{\parbox{\textwidth}{\textbf{TODO:} {#1}}}}
 
 \AtBeginEnvironment{minted}{%
   \renewcommand{\fcolorbox}[4][]{#4}}
@@ -121,6 +121,8 @@
 \include{01_introduction}
 
 \include{02_preparation}
+
+\include{03_implementation}
 
 \printbibliography
 

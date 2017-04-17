@@ -93,7 +93,18 @@ Firstly---as noted above---while the original Dataflow Model is due to researche
 On the web, the reader will therefore find various references to both the ``Dataflow Model`` and ``Beam Model``, as well as to the implementations themselves, with little consistency.
 
 The approach taken in this paper is to refer to the theoretical model described in \cite{Akidau:2015} as the Dataflow Model, and to the current, de facto official, implementation \cite{ApacheBeam} as Beam (generally referred to in full as Apache Beam).
+Further, where the ``Beam Model'' is referenced, the author means the Dataflow extended with concepts now found in Apache Beam.
+An overview of these is found in \cref{sec:impl:dataflow}.
 
 Further, the virtual machine which powers Erlang and Elixir is called the BEAM.
 While efforts are made to refer to the conflicting software in full as the BEAM VM and Apache Beam, the reader should note that wherever the virtual machine is being referred to, BEAM appears in all-uppercase form.
+
+\section{Goals and focus}\label{sec:intro:goals}
+
+Initially, the goal of the project was simply to write an implementation of a subset of the Beam Model in Elixir.
+Very quickly however, it emerged that in order to do this, a very significant amount of work had to be done to actually reverse-engineer the Beam Model from the existing open-source codebase and discussions.
+As explained in \cref{sec:impl:dataflow}, many concepts have to be introduced in order to implement the Model, but they are not described directly in any reference material.
+
+Therefore, a second goal of the project emerged, which proved to be the major focus of the project---to extend and clarify the Dataflow Model with the concepts found in Apache Beam, such that a full, implementation-ready description is produced.
+Once this work was completed, the initial goal of implementing this extended model was achieved with minimal additional effort.
 

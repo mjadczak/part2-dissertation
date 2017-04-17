@@ -1,0 +1,180 @@
+\chapter{Implementation}\label{ch:impl}
+
+\section{The Dataflow Model extended}\label{sec:impl:dataflow}
+
+While the Dataflow paper \cite{Akidau:2015} summarised in \cref{sec:prep:dataflow} gives an overview of the Dataflow Model, it does not provide sufficient detail for its full implementation.
+This section draws on many sources, including the Apache Beam codebase, the Apache JIRA issue tracker, and the Apache Beam mailing list in order to compile the extensions to the model necessary for a full, working implementation.
+
+It is important to note that many concepts in the Beam codebase are specific to the Java implementation.
+Where the author felt this was the case, a more general concept was defined.
+The need to implement these concepts in the highly different Elixir language served as a good benchmark of which concepts were implementation details rather than necessary model changes.
+The implementation details of the Elixir implementation are described later in this chapter.
+
+Keeping the previous paragraph in mind, as well as the fact that the Beam project is an active project which is constantly evolving, it is important to note that this chapter does not aim to provide a full description of the Beam Model as it stands today.
+Rather, it takes direction and inspiration therefrom to produce a self-consistent extension to the Dataflow Model which enables implementations of it to be built taking a similar approach to Apache Beam.
+
+
+\subsection{Pipelines, Transforms and Collections}
+
+\todo{figure here}
+
+Pipelines are independent units of computation.
+They are essentially DAGs representing the flow of data through the system as it is transformed.
+Each node in this graph is a Transform\footnotemark.
+As can be seen in <figure ref here>, Transforms can have multiple inputs or outputs.
+
+\footnotetext{
+In the Beam documentation and various other literature, these objects are called PTransforms and PCollections (with ``P'' standing for ``parallel'').
+In this document, they are simply referred to as Transforms and Collections, always capitalised.
+}
+
+Each edge in the graph represents a Collection.
+This is a notion of the data flowing between Transforms.
+We say that data is added to a Collection whenever its producing Transform outputs data.
+
+\todo{expand on the difference between data (elements) and Collections, and AppliedTransforms vs Transforms}
+
+\todo{structure of elements}
+
+\subsection{Windows and panes}
+
+\todo{explain difference between elementwise and grouping transforms, more on windows?}
+
+\todo{introduce merging windows e.g.\ sessions}
+
+A \emph{pane} is an element output from a grouping Transform, representing the output of that Transform for a given window.
+Each pane is marked as early, on time, or late, and only up to one on time pane is ever output for each window.
+
+\subsection{Watermarks}
+
+As mentioned in \cref{sec:prep:dataflow:when}, a \emph{watermark} is a promise or heuristic indicating progress in the event stream.
+There are several types of watermark in use in the model, described below.
+
+Conceptually, each Collection in the system has a monotonic watermark in event time, called the \emph{global watermark}.
+It approximates the point in time up to which the contents of the Collection have been produced.
+It is not necessarily actually knowable or able to be computed, either because of the properties of the collection itself, or because of the distribution of the system among remote nodes.
+
+Each Transforms may consume (or produce) one or more Collections as inputs (outputs).
+The minimum of the global watermarks of its input Collections is the Transform's \emph{global input watermark} ($\mathit{GIWM}$).
+Similarly, the minimum of the global watermarks of its output Collections is its \emph{global output watermark} ($\mathit{GOWM}$).
+In this way, the I/O watermarks extend the notion carried by Collection watermarks to apply to the entire event streams Transforms consume and produce.
+
+However, as mentioned above, global watermarks of collections are not necessarily knowable.
+Therefore, we introduce the concept of \emph{local watermarks}, which are scoped to each transform individually, and which provide us with the proxy through which to observe and control the system.
+
+The \emph{local input watermark} ($\mathit{LIWM}$) of a Transform is a monotonic lower bound on its global input watermark.
+Similarly, the \emph{local output watermark} ($\mathit{LOWM}$) of a Transform is a monotonic upper bound on its global output watermark.
+This ensures that we always err on the side of treating data as non-late in cases of uncertainty.
+
+It also allows us to simply use the $\mathit{LOWM}$ of one Transform which produces a Collection as one of the components of the $\mathit{LIWM}$ of its consumer.
+This means that each Transform receives a $\mathit{LIWM}$ which it cannot control, but can in turn specify its $\mathit{LOWM}$.
+
+\todo{diagram of the watermarks from notes}
+
+From these definitions, we see that \[ \mathit{GOWM} \leq \mathit{LOWM} \leq \mathit{LIWM} \leq \mathit{GIWM} \] always holds for a particular Transform.
+
+There is also a notion of a \emph{garbage collection watermark}, which is a point in time beyond which we are safe to delete all state we hold about data.
+It generally is simply a constant offset from the local input watermark.
+It is not a true component of the Model, but rather an implementation detail necessary to avoid infinitely growing memory consumption.
+This concept also limits the amount of lateness we can actually deal with in the system---elements before the GC watermark are silently dropped.
+However this is tuneable, so that the user can choose between memory consumption and preservation of late data.
+
+\subsection{``Lateness'' and its semantics}\label{sec:impl:dataflow:lateness}
+
+We have thrown around the term ``lateness'', but so far have failed to define it precisely.
+Let us rectify this now.
+
+\todo{evaluate whether using textbf for emphasis is ok or if it's too much}
+
+\textbf{An element added to a Collection is \emph{late} if its timestamp is less than the global watermark of the Collection at the time of the addition, and \emph{non-late} otherwise.}
+
+A key invariant in the Dataflow Model which allows us to easily reason about the behaviour of our system is the following:
+
+\textbf{Only late input can result in lateness anywhere in the system.}
+
+This requirement ensures that we always err on the side of marking data as non-late, and only marking it as late if we are certain that it is.
+This is because the goal of the system is to avoid lateness where possible, without holding back the progression of the pipeline.
+If we have an opportunity to integrate data which is technically late at one stage of the pipeline into output which is non-late at the next, that is a good thing---it essentially takes advantage of the fact that the later part of a pipeline may be progressing more slowly to allow data to ``catch up'' where possible, while also not holding the progress back artificially.
+
+We can define a set of rules that transforms in the Model must follow, which ensure that this invariant holds.
+
+The complication arises because we only have access to local watermarks, which are mere approximations of the global watermark, in order to do this.
+Figure X illustrates the knowability of whether input or output data is late or not, from the perspective of an individual Transform.
+
+\todo{draw timing diagram for knowability of lateness}
+
+Therefore we expand the original invariants to the following, which ensure it is maintained in the situation of imprecise knowledge of the true watermark.
+
+We say data is \emph{droppable} when the end of the window to which it belongs is before the garbage collection watermark; that is, the data is expired and can be / will be dropped at some point in the pipeline.
+
+\todo{check if this definition (droppable) goes somewhere earlier}
+
+We then impose the following invariants / requirements on Transforms:
+\begin{itemize}
+	\item If an element is added to an input Collection non-late, output derived from that element must be added to its respective Collection non-late.
+	\item If an element is added to an input Collection non-droppable, then output derived from that element must be added to its Collection non-droppable.
+	\item If a pane is emitted, it should not be droppable.
+	\item The panes of a window must follow the sequence \verb|EARLY* ON_TIME? LATE*| (zero or more early panes, then zero or one on time panes, then zero or more late panes).
+	\item If a pane is marked early or on time, it must be non-late in actuality.
+	\item If a pane is marked late, it must have been derived \textbf{exclusively} from late input elements.
+\end{itemize}
+
+\subsection{Grouping Transform semantics}
+
+\todo{if short on space, move the details of this section to an appendix, but keep only overall decisions/priorities, and the motivations. This is probably a prime candidate for shortening anyway.}
+
+Keeping in mind that the overall goal is to allow the output watermark to progress as fast as possible without introducing any lateness which was not introduced at the source, an overview of the algorithm every grouping Transform must follow can be defined.
+
+Suppose that we have received an element with timestamp $t_{\mathit{in}}$ which belongs to a particular window $w$ with maximal timestamp $t_{\mathit{EOW}}$, and it is abut to be buffered for output at a later stage.
+The element also has a time $t_{\mathit{out}}$, which indirectly indicates the timestamp of the pane this element will be part of.
+This time is such that \[t_{\mathit{in}} \leq t_{\mathit{out}} \leq t_{\mathit{EOW}}\] and is included to allow the advancement of the output watermark even if the current window is not yet ready for output.
+For example, with sliding windows
+
+\todo{expand sliding windows example of tout. Also indicate this is user-configurable via OutputTimeFn?}
+
+We don't want elements that will be output late anyway to hold up the output watermark, except to avoid becoming droppable.
+
+There are two questions to answer in order to proceed:
+\begin{enumerate}
+	\item When is $t_{\mathit{in}}$ late with regards to the input Collection?
+	\item When is $t_{\mathit{out}}$ late with regards to the output Collection?
+\end{enumerate}
+
+Referring to <ref to lateness knowability figure> we see that
+\begin{enumerate}
+	\item \begin{itemize}
+	\item $t_{\mathit{in}}$ \textbf{is late} if $t_{\mathit{in}} < \mathit{LIWM}$.
+	\item Otherwise, if $t_{\mathit{in}} \geq \mathit{LOWM}$, $t_{\mathit{in}}$ \textbf{could be late} (but we don't know).
+	\end{itemize}
+	\item \begin{itemize}
+	\item $t_{\mathit{out}}$ \textbf{is non-late} if $t_{\mathit{out}} \geq \mathit{LOWM}$.
+	\item Otherwise, if $t_{\mathit{out}} < \mathit{LOWM}$, $t_{\mathit{out}}$ \textbf{could be late}. However, in this case, $t_{\mathit{in}}$ \textbf{is definitely late} since $t_{\mathit{in}} \leq t_{\mathit{out}} < \mathit{LOWM} \leq \mathit{LIWM}$.
+	\end{itemize}
+\end{enumerate}
+
+We have a further requirement for the behaviour of our grouping Transform.
+We want to be sure to fire at most one on time pane.
+It \textbf{must} contain all non-late input data up to the end of the window.
+It could also contain some late input data which luckily arrived before we emitted the pane (but we do not wait for such data).
+
+\todo{write up the rest of the notes here, covering droppability, exact algorithm for determining how to hold the watermark, how to label the panes going out, how to compute the timestamp of the pane element (OutputTimeFn) and how tin maps to tout, and what happens when windows merge.}
+
+
+\subsection{Triggers, timers and holds}
+
+\subsection{Watermark domains}
+
+
+\section{The Dataflow Model implemented}\label{sec:impl:approach}
+
+\subsection{Making state explicit}
+
+\todo{discuss moving from a stateful approach where things can just grab state out of thin air and mutate it, into an explicit approach of functions taking state and returning a modified version of the state. Also expand on how this forces greater focus on what a particular function actually does as it needs to explicitly receive things it needs, and explicitly return things it touches/modifies.}
+
+\subsection{Managing concurrency with OTP and GenServers}
+
+\todo{Introduce the concept of OTP, GenServers and how they provide robust, serialised concurrency. Make clear how building on top of these core libraries is advantageous and appropriate. Mention how clear semantics enable concurrency design.}
+
+\subsection{The GenStage library}
+
+\todo{Introduce concept of GenStage and how it builds on GenServer. Mention how its operation is a great fit for the type of computation being done in Dataflow.}
