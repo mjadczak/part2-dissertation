@@ -87,7 +87,16 @@ In the Dataflow model, a \emph{pipeline} is an entire data processing flow.
 It may incorporate many different \emph{transforms} which pass data between each other, processing and transforming it as it flows through them.
 One can think of pipelines as DAGs\footnote{Directed Acyclic Graphs}, with nodes representing transforms and edges representing the data flowing between them.
 
-\todo{Diagrams of pipelines}
+\begin{figure}[t]
+	\subfloat[][A simple Pipeline which reads elements, counts the number of values for each key, and saves this result to a file.]{
+	\includegraphics[width=0.3\textwidth]{images/temp/pipeline-dag-basic}
+	}
+	\subfloat[][A complex Pipeline featuring branching and Transforms with multiple inputs and outputs. Posts are read from a stream, and partitioned into important and regular posts based on a live stream of users currently considered important. \par Regular posts are mined for hashtags and a top-list of those is published to a Kafka topic. Important posts are processed to extract any brand mentions, and the top 50 brands for a particular window of time are extracted. These are merged with the top hashtags from ``regular'' posts, and the top-list emailed to select subscribers and saved off to cloud storage.]{
+	\includegraphics[width=0.7\textwidth]{images/temp/pipeline-dag-complex}
+	}
+	\caption{Examples of Pipelines, simple and complex, illustrated as DAGs.}
+	\label{fig:prep:pipeline-dags}
+\end{figure}
 
 The graph does not have to be connected---it is valid for there to be multiple disjoint data processing paths.
 A given transform may produce multiple outputs and it may take in multiple inputs.
@@ -112,7 +121,13 @@ All transforms can be represented fundamentally using only two primitives: \verb
 Even though these transforms are the only primitives mentioned in the original description of the Model \cite[§2.1]{Akidau:2015}, real implementation will likely special-case several other transforms such as \texttt{AssignTimestamps} or \texttt{Window} and make them primitives for architectural or performance reasons.
 }
 
-\todo{diagrams of the transformations performed by these}
+\begin{figure}[h]
+	\centering
+	\includegraphics[width=0.6\textwidth]{images/temp/pardo-gbk}
+	\label{fig:prep:pardo-gbk}
+	\caption{An illustration of the operation of \texttt{ParDo} and \texttt{GroupByKey}. \texttt{ParDo} outputs zero or more elements per element, and \texttt{GroupByKey} outputs precisely one element per key in the input collection.}
+\end{figure}
+
 
 \verb|ParDo| represents a flat-map operation---it transforms a data element into zero or more data elements.
 The actual computation performed can be arbitrary---the only restriction is that the output depends only on the single element being processed.
@@ -137,7 +152,7 @@ We distinguish between two inherent time domains when considering our data as ev
 Event time is the time at which the event actually occurred and is an inherent property of the element itself.
 We also refer to this value as the \emph{timestamp} of an element.
 Each element in a pipeline must have a timestamp.
-We ensure that we have two ``special'' values available, the \emph{minimum} and \emph{maximum timestamps}.
+We ensure that we have two ``special'' values available, the \emph{minimal} and \emph{maximal timestamps}.
 Implementations may make these actual special values, or just use the maximal and minimal values of the underlying representation.
 
 Where there is no inherent time associated with an element (for example it is an un-dated record in a file) or we don't know the timestamp yet (we must process the record before we can extract the timestamp), the element is assigned the minimum timestamp.
@@ -150,9 +165,44 @@ The Model makes no assumptions about the synchronisation of this time across mul
 
 \subsubsection{Types of windows}
 
-\todo{describe global, fixed, sliding and session windowing}
+\begin{figure}[t]
+	\subfloat[][Global window]{
+		\includegraphics[width=0.25\textwidth]{images/temp/window-type-global}
+	}
+	\subfloat[][Fixed windows]{
+		\includegraphics[width=0.25\textwidth]{images/temp/window-type-fixed}
+	}
+	\subfloat[][Sliding windows]{
+		\includegraphics[width=0.25\textwidth]{images/temp/window-type-sliding}
+	}
+	\subfloat[][Sessions]{
+		\includegraphics[width=0.25\textwidth]{images/temp/window-type-sessions}
+	}
+	\caption{Four windowing paradigms, all supported by the Dataflow Model.}
+	\label{fig:prep:window-types}
+\end{figure}
 
-\todo{diagrams showing visually how different windows work}
+There are three windowing patterns which are most commonly used in practice.
+\Cref{fig:prep:window-types} illustrates these, along with global windowing.
+
+Global windowing simply assigns all elements to a single, infinitely large window.
+It is the same in behaviour as having no windowing at all, but in the Model we still actually assign the data to the global window.
+
+Fixed windows have a static window size, e.g.\ hourly, and are \emph{aligned}---each window contains all of the data in the system for that period of time.
+Many data processing systems support this type of windowing.
+
+Sliding windows have a static window size and slide period, e.g.\ hourly windows which start every 10 minutes.
+In general, the windows may overlap, which requires the system to be able to place a single piece of data in multiple windows.
+The windows are still aligned, meaning that each window applies across all of the data.
+
+Sessions are windows which capture some period of activity over a subset of the data.
+They are typically specified using a timeout after which a new session starts.
+Any events closer in time than that form a session.
+These windows need to be able to merge as new data is added between them.
+They are also unaligned---certain windows apply only to a subset of the data.
+
+These increasingly complex window types show a progression in complexity.
+The Dataflow Model is able to support all of these by not making assumptions about windows being aligned, non-overlapping or immutable.
 
 \subsubsection{Windowing in the Dataflow Model}
 The key insight in the Dataflow Model which allows for very flexible windowing is the generalisation of what a window is.
@@ -164,12 +214,15 @@ This may be a singleton set when windows are non-overlapping, or it could be man
 It's important to note that if the element is assigned to multiple windows, we are essentially duplicating that element into each of those windows (since all computation is implicitly grouped by the window).
 
 \texttt{merge} takes a set of windows and optionally merges some or all of them into a new set of windows.
-This is used in windowing strategies such as the session windowing mentioned earlier---this function will detect smaller windows near each other and merge them into longer sessions.
+This is used in windowing strategies such as the session windowing mentioned earlier---this function will detect smaller windows near each other and merge them into longer sessions, placing all elements from the smaller windows into the larger, new window (illustrated in \cref{fig:prep:sessions-merge}).
 Not all windowing functions take advantage of this, and in fact the common strategies apart from session windows are all non-merging.
 
-\todo{diagram / example of how values are transformed with windowing and grouping}
+\begin{figure}[t]
+	\includegraphics[width=\textwidth]{images/temp/sessions-assign-merge}
+	\caption{The sessions windowing functions being used to assign elements with two separate keys into session-based windows. The \texttt{assign} operation puts each element in each key into its own 20 minute-long window. The \texttt{merge} operation then takes any overlapping windows and merges them into a larger window spanning all original windows.}
+	\label{fig:prep:sessions-merge}
+\end{figure}
 
-\todo{show an example of the two functions being used to effect session-based windowing}
 
 \subsection{``The When'': Watermarks and triggers}\label{sec:prep:dataflow:when}
 
@@ -187,13 +240,16 @@ A \emph{watermark} is a lower bound, in event time, on the timestamps of values 
 For example, if at a particular instant the watermark is time $T$, then we are being promised that all events with timestamps earlier than $T$ have been processed.
 A graph of watermark progression against processing time (such as the one in <TODO ref here>) is a useful way to visualise the progress of a pipeline.
 Further, this concept allows us to construct a powerful model of lateness in the system.
-This is explored further in \cref{sec:prep:dataflow_extra:lateness}.
+This is explored further in \cref{sec:impl:dataflow:lateness}.
 
-\todo{diagram of elements being processed in time vs.\ a watermark}
+\begin{figure}[h]
+	\includegraphics[width=\textwidth]{images/temp/watermark-progression-example}
+	\caption{An example of a watermark progression. The ideal watermark shows the best possible result---processing each element immediately as it is produced. The actual watermark is a heuristic for the actual watermark for the system. We can see that the element marked (a) arrived behind the watermark---it was unexpectedly late to arrive and will be in fact marked as late.}
+\end{figure}
 
 The reader may at this point be asking, ``where does the watermark come from?''
 Watermarks in the Dataflow Model are heuristics generated by sources of data, or by user logic in the pipeline.
-The exact behaviour is described in \cref{sec:impl:dataflow}.
+Their exact behaviour is described in \cref{sec:impl:todo}.
 
 \subsubsection{Triggering model}
 
@@ -296,14 +352,29 @@ Often core modules had to be re\"implemented multiple times over, as the model b
 The Elixir language, with its clear modular structure combined with writing simple, composable functions enabled a flexible model where key logic in the codebase could be refactored with ease when needed.
 While its explicit nature meant that modules did actually have to be rewritten instead of functionality piled on top as would be possible in a mutable OOP language, this actually resulted in cleaner and more maintainable code with a clear focus.
 
-Owing to this, the spiral model <ref?> of development was adopted, with core modules prototyped, integrated, and then refactored, extended or rewritten as other parts of the system demanded it.
+Owing to this, a spiral model <ref?> of development was adopted, with core modules prototyped, integrated, and then refactored, extended or rewritten as other parts of the system demanded it.
+The process is illustrated in \cref{fig:prep:spiral-model}.
 Overall three or four iterations of prototyping and evaluating were performed, going all the way from a basic proof-of-concept to a working system implementing most key features of the Model.
 
-\todo{summarise spiral model itself? Include a diagram.}
+\begin{figure}[h]
+	\centering
+	\includegraphics[width=0.6\textwidth]{images/temp/spiral}
+	\caption{The spiral model of development as used in this project.}
+	\label{fig:prep:spiral-model}
+\end{figure}
+
+
+\todo{Flesh the diagram out more, maybe indicate the features completed at each prototype iteration?}
 
 \subsection{Testing approach}
 
-\todo{mention small, testable modules as well as end-to-end examples}
+Owing to the modular nature of Elixir making it easy to write small modules with pure functions, module-level testing was employed.
+Small tests were written in order to check the invariants required by the model were satisfied by the implementation.
+
+\todo{No they weren't. Either write the tests or take this out.}
+
+Additionally, several end-to-end examples were written to exercise the entire system.
+Some of these were also re\"implemented in Java and used for comparison purposes in the evaluation phase of the project.
 
 \section{Starting point}\label{sec:prep:starting}
 

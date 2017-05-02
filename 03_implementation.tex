@@ -20,17 +20,21 @@ Nevertheless, these concerns are outside the scope of this project and will only
 
 \subsection{Pipelines, Transforms and Collections}
 
-\todo{figure here}
-
 Pipelines are independent ``namespaces'' of computation.
 They are essentially DAGs representing the flow of data through the system as it is transformed.
+
+\begin{figure}[t]
+	\includegraphics[width=\textwidth]{images/temp/composite-example}
+	\caption{An example of a Pipeline utilising composite Transforms. The large arrows indicate the conceptual data flow path. The user expects to see visualisations or statistics using this abstraction. The red edges indicate the actual execution-time data flow---only leaf Transforms are actually instantiated and exchange data.}
+	\label{fig:impl:composite-transforms}
+\end{figure}
 
 Each node in this graph is a Transform.\footnote
 {
 In the Beam documentation and various other literature, these objects are called PTransforms and PCollections (with ``P'' standing for ``parallel'').
 In this document, they are simply referred to as Transforms and Collections, always capitalised.
 }
-As can be seen in <figure ref here>, Transforms can have multiple inputs or outputs.
+Transforms can have multiple inputs or outputs.
 
 Each edge in the graph represents a Collection.
 This is a notion of the data flowing between Transforms.
@@ -38,14 +42,14 @@ Collections can be thought of as the description of all the data that will ever 
 The way we construct a Pipeline is by applying Transforms to Collections, the result being another, new Collection (or a structure grouping multiple new Collections).
 This Collection encodes various information about the data, depending on the implementation, but among the more important data are the windowing strategy that the collection will follow, used by windowing transforms, which Transform produces the Collection, and the type of the data which will be produced.
 
-Transforms may be primitive or composite---a primitive Transform is directly executed by the pipeline runner, while a composite Transform ``expands'' into multiple sub-Transforms at application.
+Transforms may be primitive or composite---a primitive Transform is directly executed by the pipeline runner, while a composite Transform ``expands'' into multiple sub-Transforms at execution.
+This is illustrated in \cref{fig:impl:composite-transforms}.
 Different runners may choose to implement different Transforms as primitives and provide composite implementations for the rest.
 They do this in a process called \emph{graph surgery}, performed before they start executing the Pipeline.
 
 Composite Transforms are tracked for informational purposes (statistics, logging or visualisation), but don't actually get instantiated at execution time.
 The existence of composite Transforms is one of the reasons it is important to track the producer of each Collection---the true producer may be within a nested tree of Transforms rather than being the Transforms we applied directly to the input Collection.
 
-\todo{consider figure of composite transform vs actual producer}
 
 \todo{fix terminology about the below and refactor this section to keep it consistently---easy to get the concepts confused.}
 
@@ -154,9 +158,13 @@ It can never (during normal operation\footnotemark) advance its $\mathit{LOWM}$ 
 The exceptions being a Transform at the edge of a watermark domain (\cref{sec:impl:dataflow:wmdomains}) or watermarks being artificially advanced to the maximal timestamp in order to shut down a portion of the Pipeline.
 } 
 
-\todo{diagram of the watermarks from notes}
+\begin{figure}[t]
+	\includegraphics[width=\textwidth]{images/temp/lwm-transform-instantaneous}
+	\caption{An instantaneous view of the watermarks of a particular Transform at a single point in processing time.}
+	\label{fig:impl:lwm-instantaneous}
+\end{figure}
 
-From these definitions, we see that \[ \mathit{GOWM} \leq \mathit{LOWM} \leq \mathit{LIWM} \leq \mathit{GIWM} \] always holds for a particular Transform.
+We see that \[ \mathit{GOWM} \leq \mathit{LOWM} \leq \mathit{LIWM} \leq \mathit{GIWM} \] always holds for a particular Transform. \Cref{fig:impl:lwm-instantaneous} illustrates this.
 
 There is also a notion of a \emph{garbage collection watermark}, which is a point in time beyond which it is safe to delete all state we hold about data.
 It is usually a constant offset from the local input watermark.
@@ -196,9 +204,19 @@ If we have an opportunity to integrate data which is technically late at one sta
 We can define a set of rules that Transforms in the Model must follow which ensure that the above invariant holds.
 
 A complication arises because we only have access to local watermarks, which are mere approximations of the global watermark, in order to do this.
-\Cref{fig:todo} illustrates the knowability of whether input or output data is late or not, from the perspective of an individual Transform.
+\Cref{fig:impl:lateness-knowability} illustrates the knowability of whether input or output data is late or not, from the perspective of an individual Transform.
 
-\todo{draw timing diagram for knowability of lateness}
+\begin{figure}[t]
+	\subfloat[][The knowability of the lateness of $t_{\mathit{in}}$ with respect to the $\mathit{LIWM}$.]{
+		\includegraphics[width=\textwidth]{images/temp/lateness-knowability-input}
+	}\\
+	\subfloat[][The knowability of the lateness of $t_{\mathit{out}}$ with respect to the $\mathit{LOWM}$.]{
+		\includegraphics[width=\textwidth]{images/temp/lateness-knowability-output}
+	}
+	\caption{Diagram illustrating the knowability of the lateness of elements with respect to their position relative to local watermarks.}
+	\label{fig:impl:lateness-knowability}
+\end{figure}
+
 
 We therefore expand the original invariants to the following, which ensure the original invariant it is maintained in the situation of imprecise knowledge of the true watermark.
 
@@ -240,13 +258,26 @@ We don't want elements that will be output late anyway to hold up the output wat
 
 \subsubsection{Lateness}
 
+\begin{figure}
+	\centering
+	\subfloat[][If $t_{\mathit{in}}$ could be non-late, then $t_{\mathit{out}}$ must be non-late. Similarly, if $t_{\mathit{out}}$ could be late, then $t_{\mathit{in}}$ must be late. If $t_{\mathit{out}}$ is non-late and the $\mathit{LIWM}$ has not reached the end-of-window, $t_{\mathit{out}}$ is on-time.]{
+		\includegraphics[width=\textwidth]{images/temp/lateness-semantics-1}
+		\label{fig:impl:lateness-semantics:a}
+	}\\
+	\subfloat[][If the $\mathit{LIWM}$ has passed the end-of-window, then $t_{\mathit{in}}$ is definitely late. $t_{\mathit{out}}$ may technically be non-late, but it is not on-time.]{
+		\includegraphics[width=0.5\textwidth]{images/temp/lateness-semantics-2}
+	}
+	\caption{Diagrams showing regions in event time associated with particular late/non-late or on-time knowledge of $t_{\mathit{in}}$ and $t_{\mathit{out}}$.}
+	\label{fig:impl:lateness-semantics}
+\end{figure}
+
 There are two questions to answer in order to proceed:
 \begin{enumerate}
 	\item When is $t_{\mathit{in}}$ late with regards to the input Collection?
 	\item When is $t_{\mathit{out}}$ late with regards to the output Collection?
 \end{enumerate}
 
-Referring to \cref{fig:todo} we see that
+Referring to \cref{fig:impl:lateness-semantics}\subref{fig:impl:lateness-semantics:a} we see that
 \begin{enumerate}
 	\item \begin{itemize}
 	\item $t_{\mathit{in}}$ \textbf{is late} if $t_{\mathit{in}} < \mathit{LIWM}$.
@@ -265,6 +296,8 @@ We have a further requirement for the behaviour of our grouping Transform.
 We want to be sure to fire at most one on-time pane.
 It \textbf{must} contain all non-late input data up to the end of the window.
 It could also contain some late input data which luckily arrived before we emitted the pane (but we do not wait for such data).
+
+To allow us to reason about this, we say that $t_{\mathit{out}}$ is \emph{on-time} if it is non-late, and the input watermark has not yet advanced past its $t_{\mathit{EOW}}$, that is the element arrived early enough to be included in the on-time pane.
 
 \subsubsection{Droppability}
 
@@ -338,8 +371,6 @@ The priorities it adopts, therefore, are:
 	\item if process late data and may output late, hold the local output watermark as little as possible (allow it to progress as far as possible);
 	\item ensure that the invariants hold and that only a single on-time pane is output.
 \end{itemize}
-
-To allow us to reason about the last one of these, we say that an element is \emph{on-time} if it is non-late, and the input watermark has not yet advanced past its $t_{\mathit{EOW}}$, that is the element arrived early enough to be included in the on-time pane.
 
 We introduce yet another timestamp for each element, the emission timestamp $t_{\mathit{emit}}$.
 It is the timestamp that we actually input into the combination function of the OutputTimeFn to obtain the final timestamp of the resultant pane $T_{\mathit{emit}}$.
