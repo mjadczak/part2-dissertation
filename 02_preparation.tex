@@ -42,7 +42,7 @@ Then, we make use of the pipeline operator \exs{|>} to write things like
 \end{minted}
 which is equivalent to
 \begin{minted}{elixir}
-String.pad_trailing(String.capitalize("foo"), 10)		
+String.pad_leading(String.capitalize("foo"), 10)		
 \end{minted}
 but expresses the steps in the computation much more clearly.
 This convention matches very well with the Dataflow model, which also operates in terms of defining a pipeline of transformations for data to flow through.
