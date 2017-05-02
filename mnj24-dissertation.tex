@@ -2,7 +2,10 @@
 \documentclass[12pt,a4paper,twoside,openright]{scrreprt}
 \usepackage[utf8]{inputenc}
 \usepackage[british]{babel}
-\usepackage{geometry} % see geometry.pdf on how to lay out the page. There's lots.
+% print
+% \usepackage[bottom=20mm, inner=25mm, outer=15mm, headsep=5mm, headheight=5mm, top=20mm, includefoot, heightrounded]{geometry}
+% screen
+ \usepackage[bottom=20mm, inner=20mm, outer=20mm, headsep=5mm, headheight=5mm, top=20mm, includefoot, heightrounded]{geometry}
 \usepackage[usenames,dvipsnames,svgnames,table]{xcolor}
 \usepackage{graphicx}
 \usepackage{caption}
@@ -33,6 +36,7 @@
 \usepackage{hyperref}
 \usepackage[style=ieee]{biblatex}
 \usepackage[capitalise]{cleveref}
+\usepackage[titletoc]{appendix}
 
 
 \usemintedstyle{tango}
@@ -51,13 +55,15 @@
 \crefrangemultiformat{section}{§§#3#1#4--#5#2#6}{ and~#3#1#4--#5#2#6}{, #3#1#4--#5#2#6}{ and~#3#1#4--#5#2#6}
 \Crefrangemultiformat{section}{§§#3#1#4--#5#2#6}{ and~#3#1#4--#5#2#6}{, #3#1#4--#5#2#6}{ and~#3#1#4--#5#2#6}
 
-\setlength{\oddsidemargin}{-0.4mm}    % 25 mm left margin - 1 in
-\setlength{\evensidemargin}{\oddsidemargin}
-\setlength{\topmargin}{-5.4mm}        % 20 mm top margin - 1 in
-\setlength{\textwidth}{160mm}         % 20/25 mm right margin
-\setlength{\textheight}{237mm}        % 20 mm bottom margin
-\setlength{\headheight}{5mm}
-\setlength{\headsep}{5mm}
+
+% Uncomment below for version suitable for screens
+%\setlength{\oddsidemargin}{-0.4mm}    % 25 mm left margin - 1 in
+%\setlength{\evensidemargin}{\oddsidemargin}
+%\setlength{\topmargin}{-5.4mm}        % 20 mm top margin - 1 in
+%\setlength{\textwidth}{160mm}         % 20/25 mm right margin
+%\setlength{\textheight}{237mm}        % 20 mm bottom margin
+%\setlength{\headheight}{5mm}
+%\setlength{\headsep}{5mm}
 \setlength{\parindent}{0mm}
 \setlength{\parskip}{\medskipamount}
 \renewcommand\baselinestretch{1.15} % thesis format (not needed for techreport)
@@ -123,6 +129,14 @@
 \include{02_preparation}
 
 \include{03_implementation}
+
+\include{04_evaluation}
+
+\include{05_conclusions}
+
+\begin{appendices}
+	\include{99_A_glossary}
+\end{appendices}
 
 \printbibliography
 

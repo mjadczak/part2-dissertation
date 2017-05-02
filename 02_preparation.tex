@@ -2,9 +2,69 @@
 
 \section{The Elixir programming language (a primer)}\label{sec:prep:elixir}
 
+Elixir is a modern, functional language which executes on the BEAM VM, the standard VM used by Erlang.
+It has many interesting and powerful features, and the reader is encouraged to make use of the many excellent resources in order to study it in depth.
+This section aims only to provide a short description of the language to provide context for the implementation chapter.
+Any special syntax or semantics in code examples will be explained where introduced.
+
 \subsection{Language basics}
 
+Elixir is a dynamically-typed, garbage collected functional language.
+Values are immutable and looping behaviours are implemented through recursion, making use of tail-call optimisation, as in many other functional languages.
+
+Elixir has the usual assortment of useful data types including arbitrary-sized integers, arbitrary-sized tuples, lists, maps (dictionaries) and strings (a special case of the ``binary'' type which can store arbitrary bytes or bitstrings).
+It also has the concept of ``atoms'' denoted \exs{:foo}, which in code look like special strings, but at runtime are actually integers indexing into a global atom table, making comparisons very fast.
+As such, atoms are used very often to tag tuples, for example \exs{{:ok, result}}.
+These tagged tuples are very flexible and often replace the role that abstract data types in more classical functional languages.
+
+Elixir has first-class functions and supports both defining lambdas and capturing existing functions within modules as lambdas.
+All values in Elixir are automatically able to be serialised.
+This includes functions and modules, which are serialised in their bytecode form, and makes it very easy to ship code over the wire, facilitating the distribution of work across a system.
+
+Elixir also has powerful pattern-matching capabilities, available in function heads and \exs{case} expressions.
+Since all values in the language can be directly expressed in the syntax (there are no user-definable types) any value can be directly matched, and values such as tuples, maps and list can be destructured and their contents matched directly.
+
+Elixir uses modules to organise functions.
+A module is simply a namespace in which functions and macros, both public and private, can be placed.
+Module names are atoms themselves, and in fact we can store them pass them around, dynamically calling functions within them at runtime.
+
+Elixir has a very powerful macro system, which allows for the arbitrary transformation of the AST at compile-time.
+In fact, most of the standard language directives such as those which define modules and functions or control the flow of the program are themselves macros.
+
+Elixir programs often adopt the paradigm of data being transformed by flowing through a pipeline of functions.
+To that end, the convention in Elixir for functions which operate on data is to take the thing being transformed as the first argument to the function.
+Then, we make use of the pipeline operator \exs{|>} to write things like
+\begin{minted}{elixir}
+"foo"
+|> String.capitalize()
+|> String.pad_leading(5)
+# produces "  foo"
+\end{minted}
+which is equivalent to
+\begin{minted}{elixir}
+String.pad_trailing(String.capitalize("foo"), 10)		
+\end{minted}
+but expresses the steps in the computation much more clearly.
+This convention matches very well with the Dataflow model, which also operates in terms of defining a pipeline of transformations for data to flow through.
+
 \subsection{Concurrency model and the OTP framework}
+
+Elixir and Erlang have a concept of processes, which are very lightweight ``threads'' managed by the VM itself and scheduled transparently across hardware threads.
+The VM can support many thousands of processes with a predictable, linear performance curve, making it very suitable for writing highly concurrent systems.
+Processes each have their own heap and can communicate with each other by sending messages.
+Data passed in a message is copied.
+
+OTP is a framework shipped with the standard Erlang distribution which provides a way to develop robust concurrent and distributed systems, providing powerful tools to isolate, monitor and act on failures.
+It is used to organise processes into supervision trees, with certain processes being responsible for starting, supervising (monitoring for crashes and errors, potentially restarting child processes) and ending child processes.
+In this way we can isolate failures and handle them explicitly, giving the programmer the tools to create robust and failure-tolerant systems.
+
+OTP also provides powerful concurrency primitives such as state machines and generic servers which handle many common edge cases and failure modes so prevalent in distributed systems.
+It also allows for the connection of multiple BEAM nodes in a cluster, allowing for the transparent sending of messages between processes on different nodes.
+
+It is a typical pattern to use these primitives to build systems with an actor model---isolated processes each handling a particular concern, communicating by sending messages.
+
+While only a small portion of the power of OTP is used in the implementation in this project, a full production-ready distributed implementation of the Model in Elixir would be able to take advantage of the many advanced primitives available to greatly reduce the code complexity and potentially performance when compared to the JVM implementations.
+In fact, many thousands of lines of code in the Java implementation are dedicated to solving the same problems and implementing the same features that one gets ``for free'' by using the BEAM VM.
 
 \section{The Dataflow Model explained}\label{sec:prep:dataflow}
 
@@ -41,6 +101,11 @@ An example of this may be a stream of events from a website, or the Twitter fire
 It may help to think of unbounded data as ``streaming'' data, but ``streaming'' and ''batch'' imply execution strategies as opposed to data properties.
 Further, in the Dataflow Model it is more convenient to think of all data as being streamed, whether that is a true infinite stream, or merely data being streamed out of a file.
 
+It is worth making the distinction between building the pipeline by conceptually ``connecting'' the different transforms, and actually executing the pipeline with real data.
+In the first case, what we are producing is really a description of the running pipeline---we describe what the transforms should do, and what the data flowing between them will look like.
+When we execute the pipeline, we need to actually materialise the transforms as some sort of structure which actually executes the processing steps declared earlier.
+The data flowing through at execution-time is made up of elements which can be thought of as tuples with the data itself (often assumed to be key-value pairs), timestamps (intrinsic to the element) and any windows which have been assigned to the element (described later).
+
 All transforms can be represented fundamentally using only two primitives: \verb|ParDo| and \verb|GroupByKey|\footnotemark[2].
 
 \footnotetext[2]{
@@ -59,8 +124,6 @@ It needs to collect \emph{all} of the data for a particular key before being abl
 An issue arises when dealing with unbounded data---how do we know when we've received all of the input for a particular key?
 
 To deal with this problem, the Dataflow Model introduces a concept of windowing.
-
-\todo{somewhere we need an explanation of elements' structure as they flow through the pipeline.}
 
 \subsection{``The Where'': Windowing}\label{sec:prep:dataflow:where}
 
@@ -147,22 +210,24 @@ There are two major shortcomings with this strategy:
 To solve these problems, we define a more complex triggering model.
 
 Firstly, we explicitly allow for data in a particular window to be emitted multiple times.
-We call each such emission a pane, and every pane is marked as either early, on time or late.
+We call each such emission a pane, and every pane is marked as either early, on-time or late.
 Secondly, we define a trigger as simply some arbitrary code which has access to time information of elements passing through the transform, as well as watermark and other timing information.
 In practice, we define a tree of triggers allowing us to easily achieve desired results (this is explored further in <todo ref>). 
 
-In this manner we can allow for many different behaviours---for example, we may want to receive approximate results (early panes) every ten seconds (in processing time) until the watermark passes the end of the window, at which point an on time pane is emitted.
+In this manner we can allow for many different behaviours---for example, we may want to receive approximate results (early panes) every ten seconds (in processing time) until the watermark passes the end of the window, at which point an on-time pane is emitted.
 Any further late data arriving after the watermark can trigger the emission of a late pane.
 This, and myriad other combinations, are all possible with this model.
-A key strength is that it decouples the marking of data as early/tentative, on time/definitive, or late/corrective, from actually processing the different panes in different ways.
+A key strength is that it decouples the marking of data as early/tentative, on-time/definitive, or late/corrective, from actually processing the different panes in different ways.
 
 \todo{maybe include a description of a particular use case and which options one would choose for it?}
 
-\todo{one sentence conclusion of triggering / windowing}
+The combination of these flexible windowing and triggering models allow for a powerful, yet predictable method of grouping and emitting data as needed, even if it is sourced from a mixture of heterogeneous, unordered, infinite streams.
+To provide these advantages, however, a surprising amount of extra machinery is required.
+This is described in more detail in \cref{sec:impl:dataflow}.
 
 \subsection{``The How'': Refinements and retractions}\label{sec:prep:dataflow:how}
 
-While the concepts defined so far allow us to specify when panes should be emitted, we haven't yet settled on what their contents should be, exactly.
+While the concepts defined so far allow us to specify when panes should be emitted, we have not yet settled on what their contents should be, exactly.
 We do this by selecting from one of the three refinement modes for a particular \verb|GroupByKey| transform:
 \begin{itemize}
 	\item The \textbf{discarding} mode simply discards the contents of the window after emitting a pane, such that any new pane emitted will contain only data received since the last emission. There is no relation between the contents of any two panes.
@@ -185,10 +250,8 @@ The components of the project can be coarsely categorised into SDKs and \emph{ru
 
 SDKs provide the user interface to the processing engine.
 They are language-specific libraries which allow users to specify the computations to be performed using the tools of their native language, without having to worry about how the computation will be executed.
-Currently there is a main, fully-featured Java SDK which serves as the \emph{de~facto} standard implementation.
+As of the time of writing, there is a main, fully-featured Java SDK which serves as the \emph{de~facto} standard implementation.
 There is also work being done on a Python version of the SDK.
-
-\todo{``as of the time of writing''?}
 
 SDKs produce descriptions of data processing pipelines in a standard format, which any runner can consume and execute.
 This allows the flexibility of being able to select and tune the execution engine orthogonally to the computation itself in accordance with the needs of each user, while keeping a lot of this complexity out of the user-facing data processing model.
@@ -217,7 +280,7 @@ It is the runner whose main focus is model correctness, and as such it is the mo
 A side-effect of the way the Dataflow/Beam project has developed is that a large amount of development of the theory of the model has occurred implicitly while the software was worked on.
 This happened in place of a formal definition of many concepts, a large amount of which were sketched out in proposals for the project and then iterated upon in code.
 
-Therefore, a huge part of this project was the extraction and reverse-engineering of these concepts from the Java codebase into a more formal specification.
+Therefore, a huge part of this project was the extraction and reverse-engineering of these concepts from the Java codebase into a more approachable specification.
 This was further necessitated by the move from an OOP to a functional approach, requiring each concept to be reduced to what it is in the abstract rather than just transferring the class hierarchy to a new language.
 
 The initial project goals did not account for this---it was assumed that a reasonable implementation could be produced from the Dataflow paper \cite{Akidau:2015} using the Beam code simply as reference.
@@ -227,14 +290,16 @@ The initial project goals did not account for this---it was assumed that a reaso
 
 \subsection{The spiral model}
 
-
-This resulted in a need for a highly adaptive and agile development process, since fundamental assumptions made initially changed many times over.
-
-\todo{give actual examples of this happening maybe?}
+The highly fluid goals of the project resulted in a need for a highly adaptive and agile development process, since fundamental assumptions made initially changed many times over.
+Often core modules had to be re\"implemented multiple times over, as the model being extracted from the existing codebase grew more complete.
 
 The Elixir language, with its clear modular structure combined with writing simple, composable functions enabled a flexible model where key logic in the codebase could be refactored with ease when needed.
+While its explicit nature meant that modules did actually have to be rewritten instead of functionality piled on top as would be possible in a mutable OOP language, this actually resulted in cleaner and more maintainable code with a clear focus.
 
-\todo{summarise spiral model, refer to previous subsection as to why it's good. Include a diagram.}
+Owing to this, the spiral model <ref?> of development was adopted, with core modules prototyped, integrated, and then refactored, extended or rewritten as other parts of the system demanded it.
+Overall three or four iterations of prototyping and evaluating were performed, going all the way from a basic proof-of-concept to a working system implementing most key features of the Model.
+
+\todo{summarise spiral model itself? Include a diagram.}
 
 \subsection{Testing approach}
 
@@ -242,6 +307,9 @@ The Elixir language, with its clear modular structure combined with writing simp
 
 \section{Starting point}\label{sec:prep:starting}
 
-\todo{Good knowledge of Elixir, and not much more regarding getting to know how Beam ticks inside.}
+The project was started ``from scratch''---all core code in the implementation was written specifically for this project, during the timeframe of the project itself.
+The author had a good working knowledge of Elixir, having had implemented several project in it before, but had no experience in working with Dataflow or Beam.
 
 \section{Summary}\label{sec:prep:summary}
+
+\todo{is this needed?}
