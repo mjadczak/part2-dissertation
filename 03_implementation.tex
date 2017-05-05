@@ -232,6 +232,10 @@ We then impose the following invariants / requirements on Transforms:
 	\item If a pane is marked late, it must have been derived \textbf{exclusively} from late input elements.
 \end{itemize}
 
+\subsection{Elementwise Transforms}
+
+\todo{describe ParDo and DoFns}
+
 \subsection{Grouping Transform semantics}
 
 \todo{if short on space, move the details of this section to an appendix, but keep only overall decisions/priorities, and the motivations. This is probably a prime candidate for shortening anyway.}
@@ -663,7 +667,171 @@ This Transform was a standard Transform which could be used to estimate the wate
 
 \section{The Dataflow Model implemented}\label{sec:impl:approach}
 
-\subsection{Constructing pipelines}
+\subsection{The Dataflow DSL}
+
+An important component of this project, and one of its original goals, was the design of a readable, approachable DSL for constructing pipelines.
+
+As described in \cref{todo}, Elixir has a widely-used pipeline operator \exs{|>}, and programmers are encouraged to express their programs using series of data transformations.
+Thus, the Dataflow way of expressing computation translates quite naturally into Elixir, and only a minimal amount of additional syntax is necessary.
+
+\begin{listing}[h]
+	\caption{An example of Pipeline construction in Elixir. A Pipeline is created, and to it are applied Transforms which count the words in a file and output these counts to a new file. The Pipeline is then executed.}
+	\label{lst:impl:elixir-construct-pipeline}
+	\begin{minted}{elixir}
+use Dataflow
+alias Dataflow.Transforms.{Core, IO, Aggregation}
+alias Dataflow.DirectRunner
+
+pipeline = Pipeline.new
+
+pipeline
+~> IO.read_file("data/data1.txt")
+~> Aggregation.count_elements()
+~> "Format Counts" -- Core.map(fn {word, count} -> "#{word}: #{count}" end)
+~> IO.write_file("data/output.txt")
+
+DirectRunner.run pipeline, sync: true
+
+	\end{minted}
+\end{listing}
+
+\Cref{lst:impl:elixir-construct-pipeline} illustrates the API with a very simple, but working example.
+We read a file which contains a single word on each of its lines.
+We count the number of occurrences of each word, format this information and output it to another file.
+
+The code is clear and understandable, and maps very well to the Elixir model of data processing.
+\Cref{fig:todo} shows this Pipeline as a DAG.
+
+In line 10, we see the \exs{--} operator being used to assign a label to a particular Transform.
+Assigning labels to transforms is an important feature, very useful for managing and visualising Pipelines.
+This notation evokes the use of \verb|--| to denote a dash in \LaTeX.
+
+\begin{listing}[h]
+	\caption{An implementation of the process in \cref{lst:impl:elixir-construct-pipeline} using regular, sequential functions.}
+	\label{lst:impl:elixir-normal-comparison}
+	\begin{minted}{elixir}
+input = File.stream!("data/data1.txt")
+output = File.stream!("data/output.txt", [:write])
+
+input
+|> count_elements() # helper function
+|> Enum.map(fn {word, count} -> "#{word}: #{count}" end)
+|> Enum.into(output)
+	\end{minted}
+\end{listing}
+
+\Cref{lst:impl:elixir-normal-comparison} shows, for comparison, how this process would usually be implemented using normal, sequential processing in Elixir.
+The most obvious difference between this listing and \cref{lst:impl:elixir-normal-comparison} is that in the latter, we include an extra \exs{pipeline} identifier which has to explicitly be \exs{run}.
+This makes sense, as the Model requires us to separate the description of the computation in the construction phase from its execution in the subsequent phase.
+
+\subsubsection{Using macros}
+
+Those with a passing familiarity with Elixir will recognise that \exs{--} is actually the list difference operator.
+While it would be possible to have the \exs{use Dataflow} statement replace the default \exs{--} with a version used for labelling Transforms, it would likely cause confusion.
+How then is this entire syntax implemented?
+
+The answer is that \exs{~>} is in fact a macro.
+Elixir macros are powerful tools, allowing arbitrary AST transformation at compile time.
+They can also cause unexpected behaviour and confusion, and the convention is to keep their use minimal, relying on functions instead.
+This is why the definition of \exs{~>} is only a few lines long, shown in \cref{lst:impl:elixir-dpipe-macro-def}.
+
+\begin{listing}[h]
+	\caption{The definition of the \exs{~>} macro, showcasing the usefulness and power of Elixir macros.}
+	\label{lst:impl:elixir-dpipe-macro-def}
+	\begin{minted}[autogobble]{elixir}
+ defmacro pvalue ~> transform_with_label do
+    case transform_with_label do
+      {:--, _, [label, transform]} ->
+        quote bind_quoted: [pvalue: pvalue, transform: transform, label: label] do
+          Dataflow.__apply_transform__(pvalue, transform, label)
+        end
+      transform ->
+        quote bind_quoted: [pvalue: pvalue, transform: transform] do
+          Dataflow.__apply_transform__(pvalue, transform)
+        end
+    end
+  end
+	\end{minted}
+\end{listing}
+
+Macros are simply functions which, at compile-time, take the Abstract Syntax Trees (ASTs) of their arguments and output an AST with which they are replaced.
+
+The \exs{~>} macro works by pattern-matching on the structure of the second argument, which will either be an AST node of the form \exs{label -- transform} (line 3) or something else (line 7).
+The macro outputs a new AST node which simply calls the \exs{Dataflow.__apply_transform__} function which contains the Transform application logic.
+This matching at the AST level means that we are free to assign \exs{--} a new meaning only within this expression, without needing to shadow the original meaning for the entire namespace.
+
+Note that we do not have to manually construct this node---the \exs{quote} macro allows us to create one by simply writing syntax and specifying which variables from the macro's environment we want to bind to the environment of the resultant AST node (the \exs{:bind_quoted} option).
+
+The only other piece of ``magic'' present is that the \exs{use Dataflow} line imports the \exs{~>} macro into the top-level namespace so that it can be used straight away.
+In fact, that line of code simply calls the \exs{Dataflow.__using__} macro.
+In this way, Elixir allows developers to strike a good balance between friendliness and ease-of-use, and the lack of magic and explicitness which is very desirable when things go wrong.
+
+Intuitively, the result of an application of the \exs{~>} operator is a Value, which is either a Collection or some compound (e.g.\ a tuple) containing Collections.
+We can hold on to Collections that are returned in this way and apply Transforms to them several times.
+This means that we can create branching Pipelines such as the one in \cref{fig:todo} easily, as shown in \cref{lst:impl:diverging-pipelines}.
+
+Note that in order to instantiate a root Transform (one which produces data obtained outside the system somehow), we apply it to the Pipeline itself.
+
+\begin{listing}[h]
+	\caption{An example of the creation of a branching Pipeline.}
+	\label{lst:impl:diverging-pipelines}
+	\begin{minted}[autogobble]{elixir}
+pipeline = Pipeline.new
+
+words =
+  pipeline
+  ~> IO.read_file("data.txt")
+  ~> extract_words()
+  
+# save words to file
+words ~> IO.write_file("words.txt")
+
+# also get the top words and write them to another file
+words
+~> get_top_words()
+~> IO.write_file("top_words.txt")
+	\end{minted}
+\end{listing}
+
+\subsubsection{Structs and protocols}
+
+Since there is a need to separate the construction and execution phases of the Model, the situation cannot be as simple as in \cref{lst:impl:elixir-normal-comparison}, where on passing a value to a ``transformation'', we simply call the function directly.
+Instead, we must store the description of the computation in the Pipeline structure.
+
+In order to facilitate this, we make use of Elixir's protocols and structures.
+A structure is simply a map with a special \exs{:__struct__} key, which exhibits some special behaviour at compile-time.
+A structure is always associated with a particular module.
+
+A protocol is an interface module consisting of a set of functions.
+Implementations of a protocol can then be defined on a per-module basis, as long as that module declares a structure.
+When the protocol functions are then called with a structure whose module implements that protocol, the actual function called will be dynamically dispatched to that module.
+
+The functions in the example listings, such as \exs{IO.read_file/1}, don't actually perform any computation themselves---instead, they return a structure which stores the arguments passed in and implements the \exs{PTransform.Callable} protocol.
+For examples, the result of calling \exs{IO.read_file("data.txt")} is \mintinline{elixir}{%IO.ReadFile{filename: "data.txt"}}.
+
+We then see from the definition of \exs{~>} in \cref{lst:impl:elixir-dpipe-macro-def} that these structures are incorporated into the Pipeline by calling the appropriate function which internally uses the protocol.
+
+The definition of the protocol is presented in \cref{lst:impl:ptransform-callable}.
+We see that the only requirement is for the Transform to be able to expand to more Transforms, following the Composite Transforms concept introduced earlier.
+Primitive Transforms are not definable by the user and receive special treatment, but the user is free to define their own Composite Transforms by providing an appropriate structure and module, much like one would define small, composable functions.
+It is technically possible to simply use a function which composes Transforms internally, but this means that this new Transform is not recognised as a node, leading to a poorer experience once visualisation and/or reporting is introduced.
+
+\subsubsection{Managing DAGs using asynchronous processes}
+
+\todo{ref to a paper on implementing functional dags in Haskell?}
+
+Constructing and working with DAGs in the absence of mutability, especially when advanced functional features such as those found in e.g.\ Haskell are not available, lies somewhere between impossible and infeasible.
+Instead of attempting to do this, we leverage the concurrency model of Elixir to simulate a mutable map of Collections and Applied Transforms inside the Pipeline structure.
+
+\todo{mention that Erlang's :digraph library also uses mutable state but is unsuitable for use here?}
+
+The call to \exs{Pipeline.new} actually starts a new process which contains a map of the Collections (edges) and Applied Transforms (nodes) in the Pipeline graph, indexed by a unique integer ID.
+This means that it is possible to easily add new structures to the DAG, even in the face of Composite Transforms or branching Pipelines.
+
+It is clear from \cref{lst:impl:diverging-pipelines} that Pipelines behave like mutable objects---merely using the \exs{~>} operator on a Pipeline modifies it.
+Therefore Pipelines in this state are better thought of as processes rather than values.
+However, once the construction of the Pipeline is finished, it is possible to ``freeze'' it and turn it into a simple data structure which once again behaves in the expected manner.
+Indeed, the \exs{DirectRunner.run} function does this internally before taking this data structure and executing it.
 
 \subsection{Making state explicit}
 
