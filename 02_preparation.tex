@@ -10,7 +10,7 @@ Elixir is a modern, functional language which executes on the BEAM VM, the stand
 This section provides only a short description of the language to give context for the implementation chapter.
 Any special syntax or semantics in code examples will be explained where introduced.
 
-\subsection{Language basics}
+\subsection{Language basics}\label{sec:prep:elixir:basics}
 
 Elixir is a dynamically-typed, garbage collected functional language.
 Values are immutable and looping behaviours are implemented through recursion, making use of tail-call optimisation, as in many other functional languages.
@@ -88,7 +88,7 @@ String.pad_leading(String.capitalize("foo"), 10)
 but expresses the steps in the computation much more clearly.
 This convention matches the Dataflow Model well, since it too works in terms of defining a pipeline of transformations for data to flow through.
 
-\subsection{Concurrency model and the OTP framework}
+\subsection{Concurrency model and the OTP framework}\label{sec:prep:elixir:otp}
 
 Elixir and Erlang have a concept of processes, which are very lightweight userspace threads managed by the VM itself and scheduled transparently across hardware threads.
 The VM can support many thousands (sometimes millions) of processes with a predictable, linear performance curve (rather than suddenly ``falling off a cliff'' under load), making it very suitable for writing highly concurrent systems.
@@ -343,7 +343,7 @@ While the Model broadly defines the concept of retractions and how they may work
 The main difficulty lies in the explosion of cached state which seems to be needed in order to allow the undoing of certain operations.
 Therefore, the implementation and precise specification of the behaviour of retractions are out of the scope of this dissertation, and will not be mentioned again.
 
-\section{Changing goals}
+\section{Changing goals}\label{sec:prep:goals}
 
 A side-effect of the way the Dataflow/Beam project has developed is that a large amount of development of the theory of the Model has occurred implicitly while the software was worked on.
 New concepts were added \emph{in situ}, without an abstract definition.
@@ -358,7 +358,7 @@ This interleaving of research and engineering required a particular approach to 
 
 \section{Software Engineering methods}\label{sec:prep:softeng}
 
-\subsection{The spiral model}
+\subsection{The spiral model}\label{sec:prep:softeng:spiral}
 
 The highly fluid goals of the project resulted in a need for a highly adaptive and agile development process, since fundamental assumptions made initially changed many times over.
 Often core modules had to be re\"implemented multiple times over, as the model being extracted from the existing codebase grew more complete.
@@ -380,7 +380,7 @@ Overall three or four iterations of prototyping and evaluating were performed, g
 
 \todo{Flesh the diagram out more, maybe indicate the features completed at each prototype iteration?}
 
-\subsection{Source code management}
+\subsection{Source code management}\label{sec:prep:softeng:scm}
 
 The project source code was maintained using Git, including a private GitHub upstream repository.
 Source control was used to checkpoint and document progress.
@@ -389,7 +389,7 @@ It was especially important with the speculative nature of much code, making it 
 
 The dissertation sources were also kept in Git, with all project data being synced to Dropbox as well as an external backup service to guard against data loss.
 
-\subsection{Testing approach}
+\subsection{Testing approach}\label{sec:prep:softeng:testing}
 
 Owing to the modular nature of Elixir making it easy to write small modules with pure functions, module-level testing was employed.
 Small tests were written in order to check the invariants required by the model were satisfied by the implementation.

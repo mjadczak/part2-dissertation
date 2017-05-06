@@ -18,7 +18,7 @@ Further extensions to the model are necessary, and present in the Beam codebase,
 These include checkpointing, serialisation and partitioning of data, but in themselves form a complex topic worthy of separate discussion.
 Nevertheless, these concerns are outside the scope of this project and will only be mentioned tangentially where relevant.
 
-\subsection{Pipelines, Transforms and Collections}
+\subsection{Pipelines, Transforms and Collections}\label{sec:impl:dataflow:pipelines-transforms-collections}
 
 Pipelines are independent ``namespaces'' of computation.
 They are essentially DAGs representing the flow of data through the system as it is transformed.
@@ -92,7 +92,7 @@ This means that the side input is not necessarily a stream of concurrent data as
 While being a useful concept, it was not implemented in this project and is not considered further in this document, mostly because of space and time concerns.
 
 
-\subsection{Windows and panes}
+\subsection{Windows and panes}\label{sec:impl:dataflow:windows-panes}
 
 As described in \cref{sec:prep:dataflow:where}, \emph{windows} are a concept used to group elements in event time (i.e.\ with regards to their intrinsic timestamps).
 In practice, a window is merely a meta-value acting as a second key by which elements are grouped.
@@ -128,7 +128,7 @@ It generally takes the form of a key-value pair with the value being the output 
 For example, a simple \verb|GroupByKey| will output panes consisting of a key and a list of values which had that key and were in the given window.
 Each pane is marked as early, on-time, or late, and only up to one on-time pane is ever output for each window.
 
-\subsection{Watermarks}
+\subsection{Watermarks}\label{sec:impl:dataflow:watermarks}
 
 As mentioned in \cref{sec:prep:dataflow:when}, a \emph{watermark} is a promise or heuristic indicating progress in the event stream.
 There are several types of watermark used in the Model.
@@ -232,11 +232,11 @@ We then impose the following invariants / requirements on Transforms:
 	\item If a pane is marked late, it must have been derived \textbf{exclusively} from late input elements.
 \end{itemize}
 
-\subsection{Elementwise Transforms}
+\subsection{Elementwise Transforms}\label{sec:impl:dataflow:elementwise}
 
 \todo{describe ParDo and DoFns}
 
-\subsection{Grouping Transform semantics}
+\subsection{Grouping Transform semantics}\label{sec:impl:dataflow:grouping}
 
 \todo{if short on space, move the details of this section to an appendix, but keep only overall decisions/priorities, and the motivations. This is probably a prime candidate for shortening anyway.}
 
@@ -476,7 +476,7 @@ When windows merge, the aggregated pane timestamps must be combined too.
 The result of accepting elements into two windows and then merging them should be the same as merging first and then combining new elements into the resultant window.
 In general, the merge function either behaves the same as the combination function, or does not use its input at all, again using the end-of-window time (the default).
 
-\subsection{Triggers and timers}
+\subsection{Triggers and timers}\label{sec:impl:dataflow:triggers-timers}
 
 In the previous section, we explored how grouping Transforms accumulate data, ensure that their output watermark is held back until the aggregate is output, and mark their output appropriately to let the downstream know of the type of pane emitted.
 However, it is still not clear how exactly they know when they should produce some output at all.
@@ -575,7 +575,7 @@ In the case of a grouping Transform, the executor simply asks the trigger driver
 The trigger has access to the current watermark state, and so can determine whether it is time to fire.
 The flexible implementation means that it could just as well set another timer at this point, enabling strategies such as ``output a pane every five seconds until the end of the window, but only if we've seen 10 elements or more''.
 
-\subsection{Watermark generation and processing}
+\subsection{Watermark generation and processing}\label{sec:impl:dataflow:watermark-generation}
 
 \todo{diagram}
 
@@ -653,7 +653,7 @@ An example of this can be seen in one of the Evaluation examples (\cref{sec:todo
 
 \section{The Dataflow Model implemented}\label{sec:impl:approach}
 
-\subsection{The Dataflow DSL}
+\subsection{The Dataflow DSL}\label{sec:impl:approach:dsl}
 
 An important component of this project, and one of its original goals, was the design of a readable, approachable DSL for constructing pipelines.
 
@@ -819,16 +819,16 @@ Therefore Pipelines in this state are better thought of as processes rather than
 However, once the construction of the Pipeline is finished, it is possible to ``freeze'' it and turn it into a simple data structure which once again behaves in the expected manner.
 Indeed, the \exs{DirectRunner.run} function does this internally before taking this data structure and executing it.
 
-\subsection{Making state explicit}
+\subsection{Making state explicit}\label{sec:impl:approach:state-explicit}
 
 \todo{discuss moving from a stateful approach where things can just grab state out of thin air and mutate it, into an explicit approach of functions taking state and returning a modified version of the state. Also expand on how this forces greater focus on what a particular function actually does as it needs to explicitly receive things it needs, and explicitly return things it touches/modifies.}
 
-\subsection{Managing concurrency with OTP and GenServers}
+\subsection{Managing concurrency with OTP and GenServers}\label{sec:impl:approach:concurrency}
 
 \todo{Introduce the concept of OTP, GenServers and how they provide robust, serialised concurrency. Make clear how building on top of these core libraries is advantageous and appropriate. Mention how clear semantics enable concurrency design.}
 
-\subsection{The GenStage library}
+\subsection{The GenStage library}\label{sec:impl:approach:genstage}
 
 \todo{Introduce concept of GenStage and how it builds on GenServer. Mention how its operation is a great fit for the type of computation being done in Dataflow.}
 
-\subsection{Extensibility using behaviours and protocols}
+\subsection{Extensibility using behaviours and protocols}\label{sec:impl:approach:extensibility}
