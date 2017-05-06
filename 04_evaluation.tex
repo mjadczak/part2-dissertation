@@ -2,6 +2,8 @@
 
 \section{Overall results}
 
+\todo{include capability matrices? Maybe construct one for this implementation? (https://beam.apache.org/documentation/runners/capability-matrix/)}
+
 \section{Correctness testing}
 
 \section{Approach to empirical evaluation}
@@ -13,6 +15,24 @@
 \section{The Twitter example}
 
 \subsection{Code comparison}
+
+\todo{below pasted from IMPL}
+
+
+Instead of directly coupling watermark management to reading from a Source (which only makes sense for some sources), we can now use general-use Transforms which can provide watermark estimation or transformation algorithms in a standard way in cases where we must generate our own watermarks.
+
+For instance, in the Twitter example in \cref{eval}, the Twitter stream contains no intrinsic watermark information in the metadata---a tweet must be processed to determine its timestamp.
+The stream contains no watermark information.
+
+In the Java implementation of the example, a custom Source had to be written which combined responsibility for reading tweets from a network stream, parsing them, extracting a timestamp, and calculating a watermark for the Collection, in one large, tightly coupled class.
+
+In the Elixir version, on the other hand, the root transform only had to worry about reading tweets from the network and parsing their JSON.
+It output them with a minimal timestamp and held its own watermark to the minimal timestamp.
+A further Transform extracted the timestamp from the data and assigned it to the elements, still in the original domain.
+This was valid since timestamps were being shifted forward.
+A further yet Transform used the element timestamps to estimate a watermark and output these elements into the new watermark domain.
+This Transform was a standard Transform which could be used to estimate the watermark of any stream of timestamped elements.
+
 
 \subsection{Performance evaluation}
 

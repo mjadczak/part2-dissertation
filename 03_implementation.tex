@@ -7,7 +7,7 @@ This section draws on many sources, including the Apache Beam codebase, the Apac
 
 It is important to note that many concepts in the Beam codebase are specific to the Java implementation.
 Where the author felt this was the case, a more general concept was defined.
-The need to implement these concepts in the highly different Elixir language served as a good benchmark of which concepts were implementation details rather than necessary model changes.
+The need to implement these concepts in the very different Elixir language served as a good benchmark of which concepts were implementation details rather than necessary model changes.
 The implementation details of the Elixir implementation are described later in this chapter.
 
 Keeping the previous paragraph in mind, as well as the fact that the Beam project is an active project which is constantly evolving, it is important to note that this chapter does not aim to provide a full description of the Beam Model as it stands today.
@@ -188,7 +188,7 @@ Let us rectify this now.
 
 \footnotetext
 {
-We use \emph{non-late} because such elements could be on-time or early, and we don't care which for the purposes of lateness semantics.
+We use \emph{non-late} because \emph{early} and \emph{on-time} have different, discrete, meanings.
 }
 
 We say an element is \emph{droppable} when the the garbage collection watermark is after the end of the window to which it belongs; that is, the data is expired and may be dropped at any further point in the Pipeline.
@@ -644,25 +644,11 @@ At these points, we are essentially reading a conceptually new, external Collect
 Since this information is unavailable before this point, it is impossible for the previous transformations to have taken account of it in determining whether input to the system was late.
 
 The watermark domain solution is the proposal of the author and is not in place in the Beam Model.
-There is no accepted general solution to this problem there.
-This solution is implemented in the Elixir implementation of the Model.
+It is included in the Elixir implementation of the Model.
+There is no accepted general solution to this problem in the Beam community.
 
 The proposed solution also potentially simplifies the original approach to Sources.
-Instead of directly coupling watermark management to reading from a Source (which only makes sense for some sources), we can now use general-use Transforms which can provide watermark estimation or transformation algorithms in a standard way in cases where we must generate our own watermarks.
-
-For instance, in the Twitter example in \cref{eval}, the Twitter stream contains no intrinsic watermark information in the metadata---a tweet must be processed to determine its timestamp.
-The stream contains no watermark information.
-
-In the Java implementation of the example, a custom Source had to be written which combined responsibility for reading tweets from a network stream, parsing them, extracting a timestamp, and calculating a watermark for the Collection, in one large, tightly coupled class.
-
-In the Elixir version, on the other hand, the root transform only had to worry about reading tweets from the network and parsing their JSON.
-It output them with a minimal timestamp and held its own watermark to the minimal timestamp.
-A further Transform extracted the timestamp from the data and assigned it to the elements, still in the original domain.
-This was valid since timestamps were being shifted forward.
-A further yet Transform used the element timestamps to estimate a watermark and output these elements into the new watermark domain.
-This Transform was a standard Transform which could be used to estimate the watermark of any stream of timestamped elements.
-
-\todo{consider just moving discussion to the evaluation and reference it here.}
+An example of this can be seen in one of the Evaluation examples (\cref{sec:todo}).
 
 
 \section{The Dataflow Model implemented}\label{sec:impl:approach}
