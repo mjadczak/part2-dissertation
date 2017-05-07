@@ -13,7 +13,20 @@ Known limitations in the implementation are also mentioned.
 
 \section{Correctness testing}\label{sec:eval:correctness}
 
+Unit tests were written for individual modules using the ExUnit library <ref>.
+
 \section{Known limitations}\label{sec:eval:limitations}
+
+This project implements only a core of features from the Beam Model.
+There are many known limitations and missing features.
+Most of these are due to time constraints in the project, compounded with changing assumptions driving some less-than-optimal decisions earlier in the process.
+
+branching pipelines---need dispatcher\\
+side inputs\\
+type-checking\\
+sessions / unaligned windows in general\\
+source/sink API\\
+
 
 \todo{include capability matrices? Maybe construct one for this implementation? (https://beam.apache.org/documentation/runners/capability-matrix/)}
 
@@ -21,11 +34,91 @@ Known limitations in the implementation are also mentioned.
 
 \subsection{Test environment}\label{sec:eval:approach:environment}
 
+Efforts were made to collect data in similar environments in order to reduce the potential for unwanted error.
+
+All tests were conducted on a single machine, a MacBook Pro (15-inch, Late 2016) with a 2.9GHz Intel Core i7 CPU and 16GB of 2133 MHz RAM.
+Prior to conducting the tests, all non-essential background processes and applications were terminated.
+Tests were initiated using scripts in order to replicate multiple instances of the tests accurately.
+
+
+
 \subsection{Data collection methodologies}\label{sec:eval:approach:collection}
+
+Nevertheless, several factors remain uncontrolled for.
+For instance, due to time and resource constraints, it was not possible to set up a mock Twitter server which would serve an identical stream of data with the same latency characteristics to both implementations under test.
+Instead, the free Twitter streaming API was used live, each time with the most appropriate Twitter client library for the language being used.
+
+This may mean that some of the results observed were not directly attributable to Dataflow code, but rather to the execution of client code.
+However, this would still reflect a real-world scenario, and thus the results remain valid.
 
 \subsection{The Twitter example}\label{sec:eval:approach:twitter}
 
 \section{Code comparison}\label{sec:eval:code}
+
+\begin{listing}
+\caption{TODO}
+\label{lst:eval:twitter-elixir}
+\begin{minted}{elixir}
+use Dataflow
+alias Dataflow.Transforms.{Core, IO, Windowing, Aggregation}
+alias Dataflow.DirectRunner
+
+alias Dataflow.Utils.Time, as: DTime
+require DTime
+
+parse_as_timestamp = fn string ->
+  string
+  |> Timex.parse!("{WDshort} {Mshort} {0D} {h24}:{0m}:{0s} {Z} {YYYY}")
+  |> DateTime.to_unix
+  |> DTime.timestamp(:seconds)
+end
+
+stream_options =
+  [track: "tech,technology,Apple,Google,Twitter,Facebook,Microsoft,
+  iPhone,Mac,Android,computers,CompSci,science", language: "en"]
+
+p = Pipeline.new runner: DirectRunner
+
+p
+~> "Read Stream" -- IO.read_stream(fn -> ExTwitter.stream_filter(stream_options) end)
+~> Core.flat_map(fn tweet -> for _ <- 1..1000, do: tweet end)
+~> "Extract Timestamps" -- Windowing.with_timestamps(fn tweet ->
+      parse_as_timestamp.(tweet.created_at)
+    end, delay_watermark: {30, :seconds, :event_time})
+~> "Window Elements" -- Windowing.window(into:
+     {:sliding, size: {3, :minutes}, period: {15, :seconds}}
+   )
+~> "Extract Hashtags" -- Core.flat_map(fn tweet ->
+  case tweet.entities[:hashtags] do
+    nil -> []
+    [] -> []
+    list ->
+      list
+      |> Enum.map(fn %{text: text} -> text end)
+  end
+ end)
+~> Aggregation.count_elements()
+~> "Generate Prefixes" -- Core.flat_map(fn {tag, count} ->
+  len = String.length tag
+  for i <- 0..(len-1),
+    downcased = String.downcase(tag),
+    prefix = String.slice(downcased, 0..i),
+    do: {prefix, {tag, count}}
+ end)
+~> Aggregation.top_per_key(3, compare: fn {_tag1, count1}, {_tag2, count2} ->
+     count1 <= count2
+   end)
+~> "Discard Exact Counts" -- Core.map(fn {prefix, tcs} ->
+     {prefix, Enum.map(tcs, fn {tag, _count} -> tag end)}
+   end)
+~> Core.each(fn x -> Elixir.IO.puts "#{inspect x}" end)
+
+Pipeline.run p, sync: true	
+\end{minted}
+	
+\end{listing}
+
+
 
 \todo{below pasted from IMPL}
 
