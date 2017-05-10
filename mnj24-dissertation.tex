@@ -51,6 +51,8 @@
 \crefrangeformat{section}{§§#3#1#4--#5#2#6}
 \Crefrangeformat{section}{Sections #3#1#4--#5#2#6}
 
+\crefname{appch}{Appendix}{Appendices}
+
 \crefmultiformat{section}{§§#2#1#3}{ and~#2#1#3}{, #2#1#3}{ and~#2#1#3}
 \Crefmultiformat{section}{Sections #2#1#3}{ and~#2#1#3}{, #2#1#3}{ and~#2#1#3}
 
@@ -140,6 +142,7 @@
 \include{05_conclusions}
 
 \begin{appendices}
+	\crefalias{chapter}{appch}
 	\include{99_A_glossary}
 \end{appendices}
 
