@@ -1,9 +1,17 @@
 \chapter{Implementation}\label{ch:impl}
 
+As mentioned in \cref{sec:prep:goals}, the project involved two primary tasks executed concurrently.
+
+The first was the extraction and description of the extensions to the Dataflow Model necessary for its implementation.
+\Cref{sec:impl:dataflow} describes the results of this work in detail.
+
+This extended model was then implemented in Elixir.
+\Cref{sec:impl:approach} discusses several technical decisions made during this process.
+
 \section{The Dataflow Model extended}\label{sec:impl:dataflow}
 
 While the Dataflow paper \cite{Akidau:2015} summarised in \cref{sec:prep:dataflow} gives an overview of the Dataflow Model, it does not provide sufficient detail for its full implementation.
-This section draws on many sources, including the Apache Beam codebase, the Apache JIRA issue tracker, and the Apache Beam mailing list in order to compile the extensions to the model necessary for a full, working implementation.
+This section draws on many sources, including the Beam codebase, issue tracker, and mailing list in order to compile the extensions to the Model necessary for a full, working implementation.
 
 It is important to note that many concepts in the Beam codebase are specific to the Java implementation.
 Where the author felt this was the case, a more general concept was defined.
@@ -15,56 +23,57 @@ Rather, it takes direction and inspiration therefrom to produce a self-consisten
 
 Finally, the project tackles only the data processing model itself.
 Further extensions to the model are necessary, and present in the Beam codebase, in order to enable easy, automated and efficient distribution of execution across a compute cluster.
-These include checkpointing, serialisation and partitioning of data, but in themselves form a complex topic worthy of separate discussion.
+These include checkpointing, serialisation and partitioning of data, and in themselves form a complex topic worthy of separate discussion.
 Nevertheless, these concerns are outside the scope of this project and will only be mentioned tangentially where relevant.
 
 \subsection{Pipelines, Transforms and Collections}\label{sec:impl:dataflow:pipelines-transforms-collections}
 
-Pipelines are independent ``namespaces'' of computation.
-They are essentially DAGs representing the flow of data through the system as it is transformed.
+\emph{Pipelines} are independent namespaces of computation.
+They are DAGs representing the flow of data through the system as it is transformed.
 
 \begin{figure}[t]
 	\includegraphics[width=\textwidth]{images/temp/composite-example}
-	\caption{An example of a Pipeline utilising composite Transforms. The large arrows indicate the conceptual data flow path. The user expects to see visualisations or statistics using this abstraction. The red edges indicate the actual execution-time data flow---only leaf Transforms are actually instantiated and exchange data.}
+	\caption[An illustration of the function of composite Transforms in a typical Pipeline.]{A typical Pipeline uses composite Transforms. The large arrows indicate the conceptual data flow path. The user expects to see visualisations or statistics using this abstraction. The thin red edges indicate the actual execution-time data flow---only leaf Transforms are instantiated and exchange data.}
 	\label{fig:impl:composite-transforms}
 \end{figure}
 
-Each node in this graph is a Transform.\footnote
+Each node in this graph is a \emph{Transform}.\footnote
 {
-In the Beam documentation and various other literature, these objects are called PTransforms and PCollections (with ``P'' standing for ``parallel'').
+In the Beam documentation and various other literature, these objects are called PTransforms and PCollections.
 In this document, they are simply referred to as Transforms and Collections, always capitalised.
 }
 Transforms can have multiple inputs or outputs.
 
-Each edge in the graph represents a Collection.
-This is a notion of the data flowing between Transforms.
-Collections can be thought of as the description of all the data that will ever flow out of a particular transform.
-The way we construct a Pipeline is by applying Transforms to Collections, the result being another, new Collection (or a structure grouping multiple new Collections).
-This Collection encodes various information about the data, depending on the implementation, but among the more important data are the windowing strategy that the collection will follow, used by windowing transforms, which Transform produces the Collection, and the type of the data which will be produced.
+Each edge in the graph represents a \emph{Collection}.
+It is a description of all the data that will ever be produced by a particular Transform.
+Pipelines are constructed by \emph{applying} Transforms to Collections, resulting in a new Collection (or a structure grouping multiple new Collections).
+This Collection encodes various information about the data, depending on the implementation, but most important are the \emph{windowing strategy} the Collection will adopt, the producer of the Collection, and the type of data contained within.
 
-Transforms may be primitive or composite---a primitive Transform is directly executed by the pipeline runner, while a composite Transform ``expands'' into multiple sub-Transforms at execution.
+Transforms may be primitive or composite---a primitive Transform is directly executed by the Pipeline runner, while a composite Transform \emph{expands} into multiple sub-Transforms at execution.
 This is illustrated in \cref{fig:impl:composite-transforms}.
 Different runners may choose to implement different Transforms as primitives and provide composite implementations for the rest.
 They do this in a process called \emph{graph surgery}, performed before they start executing the Pipeline.
 
-Composite Transforms are tracked for informational purposes (statistics, logging or visualisation), but don't actually get instantiated at execution time.
-The existence of composite Transforms is one of the reasons it is important to track the producer of each Collection---the true producer may be within a nested tree of Transforms rather than being the Transforms we applied directly to the input Collection.
+Composite Transforms are tracked for informational purposes (statistics, logging or visualisation), but don't actually get instantiated at execution-time.
+The existence of composite Transforms is one of the reasons it is important to track the producer of each Collection---the true producer may be within a nested tree of Transforms rather than being the Transform applied directly to the input Collection.
 
-
-\todo{fix terminology about the below and refactor this section to keep it consistently---easy to get the concepts confused.}
+\subsubsection{Terminology}
 
 There are three distinct types of entities which could reasonably be called Transforms.
 The first is the class instance or structure which holds the parameters for the representation of the Transform and references its code at build-time.
-This is what we actually \emph{apply} to a Collection.
+We call this, as well as the relevant class or module itself, a \emph{Transform}.
+This is what we actually apply to a Collection.
 
 The result of such an application is a new Collection.
 However, as a side effect, a node representing a particular instance of the Transform in a tree, with particular inputs and outputs, is added to the DAG.
 We call such a node an \emph{Applied Transform}.
-As well as the parameters of the Transform that was applied, it holds extra information which will be used at execute-time.
+As well as the parameters of the Transform which was applied, it holds extra information which will be used at execution-time.
 
-Finally, at execute-time, this Applied Transform will be instantiated into some runtime structure which is responsible for actually performing computation.
+Finally, at execution-time, this Applied Transform will be instantiated into some runtime structure which is responsible for actually performing computation.
 This may be an object in the case of Java or an actor process in the case of Elixir.
 In any case we will call such an instance a \emph{Transform Executor}.
+
+In sections where the intended meaning is clear, Transform may be used to refer to any of these.
 
 \subsubsection{Collections and streams}
 
@@ -75,65 +84,51 @@ The data is groped in \emph{bundles}, which also provide a convenient primitive 
 The Elixir implementation takes a different approach, with data flowing directly between Transform Executors using message passing.
 Collections are used only to set up these links and do not exist at execution time.
 The messages sent still contain lists of elements and not individual elements for efficiency.
-This is explored further in \cref{todo}.
+This is explored further in \cref{sec:impl:approach:genstage}.
 
 This illustrates the fact that although we conceptually think of streams of data flowing between Transform Executors, in practice the data is sent and processed in chunks.
 The size of these chunks, amongst other factors, can determine where on the spectrum between batch, micro-batch and stream processing a particular runner lies.
 
-\subsubsection{Side inputs}
-
-\todo{verify this definition is precise (or don't mention it)}
-
-The Beam implementation has a concept of \emph{side inputs}, which are essentially views of Collections accessible to Transforms to aid in their processing.
-For example, a branch of our pipeline processing game messages could identify abusive users and pass the current list as a side input to another Transform which uses this list to remove certain messages from the feed.
-This means that the side input is not necessarily a stream of concurrent data as another input would be, but merely a convenient materialisation of data calculated elsewhere.
-While being a useful concept, it was not implemented in this project and is not considered further in this document, mostly because of space and time concerns.
-
-
 \subsection{Windows and panes}\label{sec:impl:dataflow:windows-panes}
 
-As described in \cref{sec:prep:dataflow:where}, \emph{windows} are a concept used to group elements in event time (i.e.\ with regards to their intrinsic timestamps).
+As described in \cref{sec:prep:dataflow:where}, \emph{windows} are used to group elements in event time (i.e.\ with regards to their intrinsic timestamps).
 In practice, a window is merely a meta-value acting as a second key by which elements are grouped.
 In the Beam and Elixir implementations, only two types of windows are present: the global window, encompassing all time and all elements, and the interval window, encompassing a specific period of time.
-The only further requirement we make of a window value is that we be able to obtain the maximal time of an element which is still within that window (the maximal timestamp for the global window, and the inclusive upper bound for an interval window).
 
-\todo{technically it's MAX\_VALUE - 1 in Beam, and special-cased in Elixir. Might not matter.}
+What gives the Model its flexibility are \verb|WindowFn|s (windowing functions), described in \cref{sec:prep:dataflow:where}.
+They are pairs functions which can \emph{assign} windows to an element based on its timestamp and \emph{merge} multiple windows when needed.
+Currently, the only commonly used merging \verb|WindowFn| is one used to implement session windowing.
 
-What gives the Model its flexibility are \emph{windowing functions}.
-A windowing function is simply a collection of two functions which, based optionally on some parameters, are able to \emph{assign} windows to an element based on its timestamp and \emph{merge} multiple windows when needed.
-Currently, the only commonly used merging windowing function is the sessions paradigm, described in \cref{sec:prep:dataflow:where}.
+\subsubsection{Elementwise and Grouping Transforms}
 
-\subsubsection{Elementwise and grouping Transforms}
-
-We can draw a distinction between two main types of Transforms---elementwise Transforms and grouping Transforms.
+We can draw a distinction between two main types of Transforms---\emph{Elementwise Transforms} and \emph{Grouping Transforms}.
 They roughly correspond to the \verb|ParDo| / \verb|GroupByKey| distinction made in \cref{sec:prep:dataflow:what}.
 
 Elementwise Transforms can be thought of as flat-map operations---they take elements and for each one immediately output zero or more other elements.
 It is possible for them to keep state, but most model pure functions.
-Any state they do keep needs to be appropriately partitioned by key and window, and more complicated Transforms which take advantage of this lay somewhere between the grouping and elementwise paradigms.
-Examples of elementwise transforms include \verb|Map|, \verb|FlatMap| and \verb|WindowInto|.
+Examples of Elementwise Transforms include \verb|Map|, \verb|FlatMap| and \verb|WindowInto|.
 
-Grouping Transforms perform all operations grouping elements by key and window.
+Grouping Transforms perform all operations partitioned by key and window.
 They generally do not output any elements until they are triggered (as described below).
-Much of the core complex logic of the Model deals with grouping Transforms and ensuring they produce the correct data at the correct time.
-Therefore both of the implementations implement core processing logic for grouping Transforms, only requiring Transform-specific code to be provided, whether as a \verb|ReducingFn| subclass in Java or a \exs{Reducer} module in Elixir, in order to create a new one.
-The \exs{ReducingEvaluator} and its associated modules which implement this complex logic in the Elixir implementation are described in \cref{sec:impl:approach}.
+Much of the core complex logic of the Model deals with Grouping Transforms and ensuring they produce the correct data at the correct time.
+Therefore, both of the implementations implement core processing logic for Grouping Transforms, only requiring Transform-specific code to be provided---whether as a \verb|ReducingFn| subclass in Java or a \exs{Reducer} module in Elixir---in order to create a new one.
+The \exs{ReducingEvaluator} and its associated modules which implement this complex logic in the Elixir implementation are described in \cref{sec:todo}.
 
-\todo{reconsider convention of capitalising Transform. It makes for weird-looking text.}
-
-A \emph{pane} is an element output from a grouping Transform when a trigger fires, representing the output of that Transform for a given key and window.
-It generally takes the form of a key-value pair with the value being the output for a particular key.
+A \emph{pane} is an element produced by a Grouping Transform when a trigger fires, representing the output of that Transform for a given key and window.
+It generally takes the form of a key-value pair.
 For example, a simple \verb|GroupByKey| will output panes consisting of a key and a list of values which had that key and were in the given window.
-Each pane is marked as early, on-time, or late, and only up to one on-time pane is ever output for each window.
+Each pane is marked as \verb|EARLY|, \verb|ON_TIME|, or \verb|LATE|, and only up to one \verb|ON_TIME| pane is ever output for each window.
 
 \subsection{Watermarks}\label{sec:impl:dataflow:watermarks}
 
-As mentioned in \cref{sec:prep:dataflow:when}, a \emph{watermark} is a promise or heuristic indicating progress in the event stream.
-There are several types of watermark used in the Model.
+\todo{another diagram here illustrating the below (non-`graph', just showing multiple watermarks combining?)}
+
+As mentioned in \cref{sec:prep:dataflow:when}, a \emph{watermark} is a heuristic indicating progress in the event stream.
+There are several classes of watermark used in the Model.
 
 Conceptually, each Collection in the system has a monotonic watermark in event time, called the \emph{global watermark}.
 It approximates the point in time up to which the contents of the Collection have been produced.
-It is not necessarily actually knowable or able to be computed, either because of the properties of the Collection itself, or because of the distribution of the system amongst remote nodes.
+It is not necessarily actually knowable or computable, either because of the properties of the Collection itself, or because of the distribution of the system amongst remote nodes.
 
 Each Transform may consume (or produce) one or more Collections as inputs (outputs).
 The minimum of the global watermarks of its input Collections is the Transform's \emph{global input watermark} ($\mathit{GIWM}$).
@@ -147,13 +142,13 @@ The \emph{local input watermark} ($\mathit{LIWM}$) of a Transform is a monotonic
 Similarly, the \emph{local output watermark} ($\mathit{LOWM}$) of a Transform is a monotonically increasing upper bound on its global output watermark.
 This ensures that we always err on the side of treating data as non-late in cases of uncertainty (see \cref{sec:impl:dataflow:lateness}).
 
-It also allows us to simply use the $\mathit{LOWM}$ of one Transform which produces a Collection as one of the components of the $\mathit{LIWM}$ of its consumer.
+This also allows us to use the $\mathit{LOWM}$ of a Transform as the local watermark of a Collection it produces.
 This means that each Transform receives a $\mathit{LIWM}$ which it cannot control, but can in turn specify its $\mathit{LOWM}$.
-It can never (during normal operation\footnotemark) advance its $\mathit{LOWM}$ beyond its $\mathit{LIWM}$ however, because it cannot be sure that it won't receive input data which causes output late with respect to the new $\mathit{LOWM}$.
+It can never (during normal operation\footnotemark) advance its $\mathit{LOWM}$ beyond its $\mathit{LIWM}$, because it cannot be sure that it won't receive input data which causes output late with respect to the new $\mathit{LOWM}$.
 
 \footnotetext
 {
-The exceptions being a Transform at the edge of a watermark domain (\cref{sec:impl:dataflow:wmdomains}) or watermarks being artificially advanced to the maximal timestamp in order to shut down a portion of the Pipeline.
+The exceptions being a Transform at the edge of a watermark domain (\cref{sec:impl:dataflow:watermark-generation}) or watermarks being artificially advanced to the maximal timestamp in order to shut down a portion of the Pipeline.
 } 
 
 \begin{figure}[t]
@@ -164,40 +159,39 @@ The exceptions being a Transform at the edge of a watermark domain (\cref{sec:im
 
 We see that \[ \mathit{GOWM} \leq \mathit{LOWM} \leq \mathit{LIWM} \leq \mathit{GIWM} \] always holds for a particular Transform. \Cref{fig:impl:lwm-instantaneous} illustrates this.
 
-There is also a notion of a \emph{garbage collection watermark}, which is a point in time beyond which it is safe to delete all state we hold about data.
+We also distinguish a \emph{garbage-collection watermark}, which is a point in time beyond which it is safe to delete all state we hold about data.
 It is usually a constant offset from the local input watermark.
 It is not a true component of the Model, but rather an implementation detail necessary to avoid infinitely growing memory consumption.
-This concept also limits the amount of lateness we can actually deal with in the system---elements before the GC watermark are silently dropped.
-However this is tuneable, so that the user can choose between memory conservation and preservation of late data.
+This concept also limits the amount of lateness we can actually deal with in the system---elements behind the garbage-collection watermark are silently dropped.
+However, the allowed lateness is tuneable, so that the user can choose between memory conservation and preservation of late data.
 
-Watermarks provide us with a useful definition of ``doneness''.
+Watermarks provide us with a useful definition of \emph{doneness}.
 In a system where unbounded data may or may not be present, it can be hard to determine when a particular section of the Pipeline is finished and will not receive or output any more data.
-We therefore use the watermark to determine this---a watermark of maximal time (infinity) means that we will never receive / output data before that timestamp; since all time is before that timestamp, this implies that we will not receive or output any data at all, and hence we are done.
+We therefore use the watermark to determine this; a watermark of maximal time (infinity) means that we will never receive / output data before that timestamp.
+Since all time is before that timestamp, this implies that we will not receive or output any data at all, and hence we are done.
 This is why bounded sources indicate they are done by simply advancing their watermark to the maximal timestamp.
 
-\subsection{``Lateness'' and its semantics}\label{sec:impl:dataflow:lateness}
+\subsection{Lateness and its semantics}\label{sec:impl:dataflow:lateness}
 
-We have thrown around the term ``lateness'', but so far have failed to define it precisely.
-Let us rectify this now.
+The Model's robustness in dealing with unordered data is made possible by a comprehensive model of \emph{lateness}.
 
-\todo{evaluate whether using textbf for emphasis is ok or if it's too much}
-
-\textbf{An element added to a Collection is \emph{late} if its timestamp is less than the global watermark of the Collection at the time of the addition, and \emph{non-late}\footnotemark\ otherwise.}
+An element added to a Collection is \emph{late} if its timestamp is less than the global watermark of the Collection at the time of the addition, and \emph{non-late}\footnotemark\ otherwise.
 
 \footnotetext
 {
-We use \emph{non-late} because \emph{early} and \emph{on-time} have different, discrete, meanings.
+We use \emph{non-late} to avoid clashing with terms used to mark panes (\cref{sec:impl:dataflow:windows-panes}).
 }
 
 We say an element is \emph{droppable} when the the garbage collection watermark is after the end of the window to which it belongs; that is, the data is expired and may be dropped at any further point in the Pipeline.
 
 A key invariant in the Dataflow Model which allows us to easily reason about the behaviour of our system is the following:
 
-\textbf{Only late input can result in lateness anywhere in the system.}
+\todo{Implement invariant numbering and referencing. Temp labels inserted.}
 
-This requirement ensures that we always err on the side of marking data as non-late, and only marking it as late if we are certain that it is.
-This is because the goal of the system is to avoid lateness where possible, without holding back the progression of the pipeline.
-If we have an opportunity to integrate data which is technically late at one stage of the pipeline into output which is non-late at the next, that is a good thing---it essentially takes advantage of the fact that the later part of a pipeline may be progressing more slowly to allow data to ``catch up'' where possible, while also not holding the progress back to wait for potential late elements.
+\textbf{Inv 3A.: Only late input can result in lateness anywhere in the system.}
+
+The goal of the system is to avoid lateness where possible, without holding back the progression of the Pipeline.
+If we have an opportunity to integrate data which is technically late at one stage of the Pipeline into output which is non-late at the next, that is a good thing---it essentially takes advantage of the fact that the later part of a Pipeline may be progressing more slowly to allow data to catch up where possible, while also not holding the progress back to wait for potential late elements.
 
 We can define a set of rules that Transforms in the Model must follow which ensure that the above invariant holds.
 
@@ -220,25 +214,21 @@ We therefore expand the original invariants to the following, which ensure the o
 
 \todo{do we need some sort of informal proof that these actually ensure the original one?}
 
-We then impose the following invariants / requirements on Transforms:
+
 \begin{itemize}
-	\item If an element is added to an input Collection non-late, output derived from that element must be added to its respective Collection non-late.
-	\item If an element is added to an input Collection non-droppable, then output derived from that element must be added to its Collection non-droppable.
-	\item If a pane is emitted, it should not be droppable.
-	\item The panes of a window must follow the sequence \verb|EARLY* ON_TIME? LATE*| (zero or more early panes, then zero or one on-time panes, then zero or more late panes).
-	\item If a pane is marked early or on-time, it must be non-late in actuality.
-	\item If a pane is marked late, it must have been derived \textbf{exclusively} from late input elements.
+	\item \textbf{3B(i).: If an element is added to an input Collection non-late, output derived from that element must be added to its respective Collection non-late.}
+	\item \textbf{3B(ii).: If an element is added to an input Collection non-droppable, then output derived from that element must be added to its Collection non-droppable.}
+	\item \textbf{3B(iii).: If a pane is emitted, it should not be droppable.}
+	\item\textbf{ 3B(iv).: The panes of a window must follow the sequence} \verb|EARLY* ON_TIME? LATE*| \textbf{(zero or more early panes, then zero or one on-time panes, then zero or more late panes).}
+	\item \textbf{3B(v).: If a pane is marked early or on-time, it must be non-late in actuality.}
+	\item \textbf{3B(vi).: If a pane is marked late, it must have been derived \emph{exclusively} from late input elements.}
 \end{itemize}
-
-\subsection{Elementwise Transforms}\label{sec:impl:dataflow:elementwise}
-
-\todo{describe ParDo and DoFns}
 
 \subsection{Grouping Transform semantics}\label{sec:impl:dataflow:grouping}
 
-\todo{if short on space, move the details of this section to an appendix, but keep only overall decisions/priorities, and the motivations. This is probably a prime candidate for shortening anyway.}
+\todo{this section needs rewritten to use much more diagrams, tables and code and less prose.}
 
-Keeping in mind that the overall goal is to allow the output watermark to progress as fast as possible without introducing any lateness which was not introduced at the source, an overview of the algorithm every grouping Transform must follow can be defined.
+Keeping in mind that the overall goal is to allow the output watermark to progress as fast as possible without introducing any lateness which was not introduced at the source, an overview of the algorithm every Grouping Transform must follow can be defined.
 
 Suppose that we have received an element with timestamp $t_{\mathit{in}}$ which belongs to a particular window $w$ with inclusive upper bound $t_{\mathit{EOW}}$, and it is abut to be buffered for output at a later stage.
 The element also has a time $t_{\mathit{out}}$, from which the timestamp of the pane this element will be part of is derived.\footnotemark\ 
@@ -246,17 +236,15 @@ This time is such that \[t_{\mathit{in}} \leq t_{\mathit{out}} \leq t_{\mathit{E
 
 \footnotetext
 {
-Both $t_{\mathit{out}}$ and the derived pane timestamp are controlled by a user-specifiable OutputTimeFn, though in most cases the default of ``use the end-of-window time for both'' is used.
+Both $t_{\mathit{out}}$ and the derived pane timestamp are controlled by a user-specifiable OutputTimeFn, though in most cases the default of `use the end-of-window time for both' is used.
 }
 
 For example, with sliding windows, once we are in the context of one particular window (elements can have multiple windows) it is safe to treat the timestamp of an element as the end of the window, because all elements in the window are processed the same and the difference is not observable in the output.
 Doing this, however, will allow us to advance the watermark to just before the end of the current window (and new elements in this window will not be late, since we perform the lateness checks on $t_{\mathit{out}}$), allowing earlier sliding windows to close and output their panes with less delay.
 
-
-
 We don't want elements that will be output late anyway to hold up the output watermark, except to avoid becoming droppable.
 
-\todo{number the invariants and reference throughout?}
+\todo{actually reference back to numbered invariants.}
 
 \subsubsection{Lateness}
 
@@ -319,29 +307,28 @@ $t_{\mathit{out}}$ \textbf{could be droppable} if $t_{\mathit{EOW}} < (\mathit{L
 Now, if $t_{\mathit{in}}$ \textbf{could be non-droppable} then $t_{\mathit{out}}$ \textbf{is} non-droppable, since \[(\mathit{LOWM} - \delta) \leq (\mathit{LIWM} - \delta) \leq t_{\mathit{in}} \leq t_{\mathit{out}}\;\text{.}\]
 Also, if $t_{\mathit{out}}$ \textbf{could be droppable} then $t_{\mathit{in}}$ \textbf{is} droppable, since \[t_{\mathit{in}} \leq t_{\mathit{out}} \leq (\mathit{LOWM} - \delta) \leq (\mathit{LIWM} - \delta)\;\text{.}\]
 
+\todo{mention all Grouping Transform computation is per window per key}
+
 \subsubsection{Watermark holds}
 
 By default, each Transform Executor outputs a watermark which is equivalent to its input watermark, unless the output watermark is held back by a \emph{watermark hold}.
 In that case, the output watermark is the earlier of the two.
-Watermark holds provide a mechanism by which the grouping Transform logic can hold back the output watermark until it is sure that it can satisfy the invariants described above.
+Watermark holds provide a mechanism by which the Grouping Transform logic can hold back the output watermark until it is sure that it can satisfy the invariants described above.
 
-Each Transform Executor has a watermark manager which maintains a pair of two holds (the data hold and end-of-window/garbage-collection hold) per window\footnotemark.
+Each Transform Executor has a \emph{watermark manager} which maintains a pair holds (the data hold and end-of-window/garbage-collection hold) per-window-per-key.
 These are maintained separately so that they can be cleared and manipulated individually, but the overall watermark hold is simply their overall minimum.
 Two holds are maintained for each window because some of the logic below requires us to know the data-derived hold even if the hold in effect is derived from the window only.
 
-\footnotetext
-{
-In the Beam implementation, holds (and other per-window concepts) are per-window-per-key for distribution reasons.
-}
-
 The data hold is, in effect, a reduction over all the element timestamps seen so far.
 The exact reducing function is determined by the OutputTimeFn in use.
-While the default one simply sets all element timestamps to the end of their window---therefore making a reduction redundant as all inputs are always the same---other strategies are available such as ``use the latest timestamp seen so far''.
+While the default simply sets all element timestamps to the end of their window---therefore making a reduction redundant as all inputs are always the same---other strategies are available such as `use the latest timestamp seen so far'.
 
 \todo{diagrams diagrams diagrams}
 
-The EOW/GC hold is a ``fallback'', used when we try to set a hold which cannot be honoured because either the output watermark has already progressed past it, or the input watermark has progressed beyond the EOW and therefore a timer to clear this hold won't be fired.
+The EOW/GC hold is a fallback used when we try to set a hold which cannot be honoured because either the output watermark has already progressed past it, or the input watermark has progressed beyond the EOW and therefore a timer to clear this hold won't be fired.
 If we try to set an element hold in either of those situations, we automatically instead try to set the EOW/GC hold instead.
+
+\todo{the below come out of specific invariants. Referencing them may make this shorter.}
 
 An end-of-window hold is set in two situations:
 \begin{itemize}
@@ -360,18 +347,16 @@ However, a garbage-collection hold may still remain for reasons described above.
 It is important to keep in mind that when we talk about ``placing a hold'' below, we actually \emph{attempt} to place an element hold with a particular timestamp, at which point the above checks are performed and the appropriate hold set (or, possibly, no hold is set).
 This allows for a decoupling of concerns in the two pieces of logic.
 
-\todo{I do actually think I should reference back to the invariants at each step, saying why it is necessary to maintain them.}
-
 \subsubsection{Transform behaviour}
 
-A grouping Transform does not output panes on receiving input elements, but only when it is triggered.
+A Grouping Transform does not output panes on receiving input elements, but only when it is triggered.
 It can, however, modify its output watermark on receiving elements, and managing this well is crucial to achieve good progress in the Pipeline.
 
-The priorities it adopts, therefore, are:
+The priorities adopted are:
 \begin{itemize}
 	\item if it is possible to output data non-late, do that as much as we can;
-	\item if process late data and may output late, hold the local output watermark as little as possible (allow it to progress as far as possible);
-	\item ensure that the invariants hold and that only a single on-time pane is output.
+	\item (TODO go back and find out what this was meant to mean) if process late data and may output late, hold the local output watermark as little as possible (allow it to progress as far as possible);
+	\item (TODO introduce this as invariant 3C) ensure that the invariants hold and that only a single on-time pane is output.
 \end{itemize}
 
 We introduce yet another timestamp for each element, the emission timestamp $t_{\mathit{emit}}$.
@@ -385,6 +370,8 @@ On receiving each element, then, the Transform Executor must decide:
 	\item what hold should be placed on the local output watermark? (see remark above)
 	\item what value will be used for $t_{\mathit{emit}}$?
 \end{itemize}
+
+\todo{the below cases will translate well to a code listing}
 
 \textbf{Case 0: $t_{\mathit{EOW}} < (\mathit{LIWM} - \delta)$}\\
 Drop the element.
@@ -402,21 +389,22 @@ We set $t_{\mathit{emit}} \coloneq t_{\mathit{EOW}}$, attempting to shift the el
 We could also use the current output watermark for $t_{\mathit{emit}}$, but this would have the effect of significantly holding back watermark progress.
 The watermark hold logic described above ensures that the hold is set at $t_{\mathit{EOW}} + \delta$, ensuring we won't produce a droppable pane.
 
+\todo{diagram}
+
 \Cref{fig:todo} illustrates the two situations that are possible in this case. It can be seen that $t_{\mathit{emit}}$ will, in general, be late once emitted, but never be droppable. 
 The timestamp used is the latest for the correct window, and the hold used is the latest that prevents dropping.
 In this way we allow the watermark to progress in the presence of late data, while ensuring it doesn't become droppable in the process.
 
 \subsubsection{Labelling panes}
 
-\todo{make a typographical distinction between the labels EARLY, ON\_TIME, LATE and the late / non-late state of the elements themselves.}
+When a Grouping Transform Executor is triggered and outputs a pane (again, simply an element of the output Collection), it must label it as either \verb|EARLY|, \verb|ON_TIME| or \verb|LATE|.
+The pane is also itself an element, and will be either late or non-late.
+This is orthogonal to its label, which merely states whether the pane represents only a subset of non-late data in a window (\verb|EARLY|), all of the non-late data (\verb|ON_TIME|), or only late data (\verb|LATE|).
 
-\todo{explain why the labels are needed and how they're used.}
-
-When a grouping Transform Executor is triggered and outputs a pane (again, simply an element of the output Collection), it must label it as either early, on-time or late.
-It does this based on the state of the watermarks and $T_{\mathit{emit}}$, the combined output timestamp determined by the OutputTimeFn from all individual $t_{\mathit{emit}}$ values.
+The decision is made based on the state of the watermarks and $T_{\mathit{emit}}$, the combined output timestamp determined by the OutputTimeFn from all individual $t_{\mathit{emit}}$ values.
 It also determines whether a pane is \emph{final}, which lets the downstream know that no more panes for this window will be emitted (as they would have been emitted droppable).
 
-Since a pane is simply another element, the standard definition of lateness applies.
+\todo{replace below with code listing}
 
 Therefore if $T_{\mathit{emit}} \geq \mathit{LOWM}$, it is non-late.
 By design, every $t_{\mathit{out}}$ that went into the pane was non-late as well.
@@ -434,68 +422,43 @@ The pane is marked final if $\mathit{LIWM} - \delta > t_{\mathit{EOW}}$, since a
 Therefore the pane is labelled as follows:
 \begin{itemize}
 	\item If $T_{\mathit{emit}}$ is possibly late, label it late.
-	\item If $T_{\mathit{emit}}$ is non-late, label it on-time is possible, and early otherwise.\footnotemark
+	\item If $T_{\mathit{emit}}$ is non-late, label it on-time is possible, and early otherwise.
 	\item Additionally, label the pane as final if appropriate.
 \end{itemize}
-
-\footnotetext
-{
-Note that in the presence of window merging, two or more on-time panes may end up being emitted for the same data.
-The ``one on-time pane'' condition holds only per unique window, and so once the window is merged to become another window, the condition holds separately for this new window.
-}
 
 \subsubsection{OutputTimeFn}
 Grouping Transforms aggregate element data into an output value.
 They must also aggregate the elements' timestamps into a single timestamp used for the output pane.
-This concern is often orthogonal to the type of data transformation being performed, and so the Model allows its specification orthogonally, through the use of OutputTimeFns.
+This concern is often orthogonal to the type of data transformation being performed, and so the Model allows its specification orthogonally, through the use of \verb|OutputTimeFn|s.
 
-An OutputTimeFn specifies three aspects of the aggregation:
+An \verb|OutputTimeFn| specifies three aspects of the aggregation:
 \begin{enumerate}
 	\item how $t_{\mathit{in}}$ maps to $t_{\mathit{out}}$;
 	\item how multiple $t_{\mathit{emit}}$ timestamps combine to give the pane timestamp $T_{\mathit{emit}}$;
 	\item how multiple tentative $T_{\mathit{emit}}$ values are combined when two windows merge.
 \end{enumerate}
 
-There are two obvious approaches for the first aspect---the identity mapping and simply shifting element timestamps to the end of their window.
-Other mappings may also be useful.
-For example, when using sliding windows we could shift timestamps just past the end of the previous sliding window, allowing it to close.
-The default behaviour in general is to output at the end of the window.
-
-Within a single window, we combine the $t_{\mathit{emit}}$ values generated for each element to obtain the final $T_{\mathit{emit}}$ value for the pane.
-An OutputTimeFn specifies an associative, commutative function which can reduce the former to the latter.
-It must also ensure that $T_{\mathit{emit}} \geq \max(t_{\mathit{emit}})$ so that non-late inputs are not made late by shifting their timestamps backwards.
-
-The default choice is to, again, use the end-of-window time.
-It is simple, efficient and easy to reason about.
-However, if the input timestamps are to be stored within the pane and then re-used later by generating new elements with those timestamps, we may use the minimum timestamp of all non-late elements seen so far.
-This will hold back the output watermark so that we can once again re-use the input timestamps without them becoming late.
-
-When windows merge, the aggregated pane timestamps must be combined too.
-The result of accepting elements into two windows and then merging them should be the same as merging first and then combining new elements into the resultant window.
-In general, the merge function either behaves the same as the combination function, or does not use its input at all, again using the end-of-window time (the default).
+There are several options available for these, but in the vast majority of cases $t_{\mathit{out}}$ is set to $t_{\mathit{EOW}}$, making the other two aspects trivial.
 
 \subsection{Triggers and timers}\label{sec:impl:dataflow:triggers-timers}
 
-In the previous section, we explored how grouping Transforms accumulate data, ensure that their output watermark is held back until the aggregate is output, and mark their output appropriately to let the downstream know of the type of pane emitted.
-However, it is still not clear how exactly they know when they should produce some output at all.
+In the previous section, we explored how Grouping Transforms accumulate data, ensure that their output watermark is held back until the aggregate is output, and mark their output appropriately to let the downstream know of the type of pane emitted.
+However, it is still not clear how they know when they should produce some output at all.
 
 The Model's answer to this is the trigger system.
 Triggers were introduced in \cref{sec:prep:dataflow:when}, but this section aims to expand on their semantics and how they function to produce the desired behaviour.
 
+\todo{should `trigger' be capitalised?}
+
 \subsubsection{Triggers as state machines}
 Once again, we draw the distinction between triggers at Pipeline-construction time, where they are simply bundles of configuration, and triggers (trigger drivers) at execution-time, where they do real work.
-In this second case we can think of triggers as finite state machines; indeed, the Beam implementation places its trigger logic in classes extending \verb|TriggerStateMachine|.
+In this second case we can think of triggers as FSMs; indeed, the Beam implementation places its trigger logic in classes extending \verb|TriggerStateMachine|.
 
-A trigger state machine is instantiated per-window (per-window-per-key in Beam) and is used by the main Transform Executor to make decisions on when to output.
+A trigger FSM is instantiated per-window-per-key and is used by the main Transform Executor to make decisions on when to output.
 We say that a trigger \emph{fires} when it instructs the Transform Executor to output a pane.
 Note that a trigger firing is binary---if it fires, all the currently accumulated data is output into a pane, which is timestamped and marked appropriately as detailed below.
 
-We can easily see the overall behaviour of the FSM by looking at the \exs{TriggerDriver} behaviour from the Elixir implementation in \cref{lst:impl:trigger_driver}.\footnotemark
-
-\footnotetext
-{
-This listing uses the Elixir behaviour/type syntax. A brief overview is available in \cref{todo}<appendix B>.
-}
+We can easily see the overall behaviour of the FSM by looking at the \exs{TriggerDriver} behaviour from the Elixir implementation in \cref{lst:impl:trigger_driver}.
 
 \begin{listing}[h]
 	\begin{minted}{elixir}
@@ -518,39 +481,39 @@ end
 
 \todo{Consider using the Elixir type syntax everywhere in this chapter to specify the different structures being talked about (instead of prose)}
 
-There we see that the FSM is first initialised (\exs{init/3}) with trigger and window data (along with a handle to a process which allows it to set and clear timers asynchronously, as well as read the watermarks and processing time).
-It then receives a series of \exs{process_element/2} calls, receiving the timestamps of elements being processed and being allowed to update its state.
-It will optionally be asked to \exs{merge/2} its state with that of other windows---typically we require that the actual trigger being used is the same in all cases.
+There we see that the FSM is first initialised (\exs{init}) with trigger and window data (along with a handle to a process which allows it to set and clear timers asynchronously, as well as read the watermarks and processing time).
+It then receives a series of \exs{process_element} calls, receiving the timestamps of elements being processed and being allowed to update its state.
+It will optionally be asked to \exs{merge} its state with that of other windows---typically we require that the actual trigger being used is the same in all cases.
 
 Note that the trigger driver itself does not asynchronously notify the transform executor of its firing.
-Instead, the transform executor will ask the trigger driver if it is ready to fire using \exs{should_fire?/1}.
-If so, a pane of output is produced and the trigger driver is notified via the \exs{fired/1} callback.
+Instead, the transform executor will ask the trigger driver if it is ready to fire using \exs{should_fire?}.
+If so, a pane of output is produced and the trigger driver is notified via the \exs{fired} callback.
 
 A trigger is \emph{closed} or \emph{finished} if it will never fire again.
 The trigger driver can be asked if it is finished using the \exs{finished?/1} callback.
-At that point it is safe to garbage collect the associated window state (including the trigger state itself), leaving only a tombstone indicating that new elements placed in this window should be ignored (since they would never have led to output anyway).
+At that point it is safe to garbage-collect the associated window state, leaving only a tombstone indicating that new elements placed in this window should be ignored.
+Once the $\mathit{LIWM}$ passes the GC time of the window, we can delete this tombstone as well.
 
 It is clear that this model allows great flexibility in specifying exactly when output should occur.
 The FSM can count elements, set timers for particular event or processing times, and flexibly decide if it will fire multiple times.
-The model could also quite easily be extended to support punctuations (data-driven triggers) by allowing \exs{process_element/2} to inspect the element value itself.
-This is not implemented, but being worked on, in Beam (as certain implementation difficulties arise there) and was considered out-of-scope for the Elixir implementation.
+The model could also be extended to support punctuations (data-driven triggers) by allowing \exs{process_element} to inspect the element value itself.
+This is not implemented, but being worked on, in Beam <JIRA ref> and was considered out-of-scope for the Elixir implementation.
 
 It should be noted that a standard pattern in the Model is to use composite triggers---for example, a trigger which fires when trigger A \emph{or} trigger B fire, or one which takes a one-time firing trigger A (one which becomes finished after firing once) and instead resets it after each firing, making it able to fire indefinitely.
-This is enabled by the decouple design of the trigger drivers, allowing them to be queried by a ``parent'' trigger just as easily as they could be queried by the transform executor itself.
+This is enabled by the decoupled design of trigger drivers, allowing them to be queried by a parent trigger just as easily as they could be queried by the transform executor itself, resulting in a tree of triggers.
 
 \subsubsection{Example: The default trigger}
 
 The \emph{default trigger} used when no other trigger is explicitly specified fires once when the event watermark passes the end-of-window, and fires again every single time a late element is seen (producing a one-element late pane with that element).
 
 \Cref{lst:impl:default_trigger} illustrates the simple logic needed to accomplish this behaviour.
-
-\todo{the listing is about 60 lines of code total including liberal line breaks for readability and comments. possibly skip it here though, maybe just include the pseudocode of the logic?}
+\todo{insert listing here, without private helper functions.}
 
 \subsubsection{Timers}
 
-Timers are a very simple, but yet flexible way to schedule asynchronous action in the future.
-A timer is simply a tuple of \exs{{namespace, time, domain}}\footnotemark, with the \exs{domain} being one of \emph{processing time} or \emph{event time}.
-A timing manager is instantiated per transform executor, though it operates asynchronously to the transform executor itself.
+Timers are a simple but flexible way to schedule asynchronous action in the future.
+A \emph{timer} is a tuple of \exs{{namespace, time, domain}}\footnotemark, with the \exs{domain} being one of processing-time or event-time.
+A \emph{timing manager} is instantiated per Transform Executor, though it operates asynchronously to the Transform Executor itself.
 It handles watermark management and timers.
 
 \footnotetext
@@ -558,20 +521,20 @@ It handles watermark management and timers.
 In Beam, timers also have a unique ID, in order to identify and compare their identity. This is not needed in Elixir, since they can be directly compared value-wise.
 }
 
-Once a timer is set, the timing manager will notify the transform executor once it fires.
-This will happen when the input watermark (event time) or clock time (processing time) \textbf{passes} the time of the timer; that is, when the appropriate time measure is strictly greater than the time of the timer.
-An exception is a timer for the maximal event time, which fires precisely when that time is reached, since it cannot advance past it.
-Multiple timers may fire simultaneously, and the transform executor will be notified of all of them.
+Once a timer is set, the timing manager will notify the Transform Executor once it fires.
+This will happen when the input watermark (event time) or clock time (processing time) \textbf{passes} the time of the timer; that is, when the appropriate time measure is \textbf{strictly greater} than the time of the timer.
+A maximal event-time timer fires precisely when that time is reached, since time cannot advance past it.
+Multiple timers may fire simultaneously, and the Transform Executor will be notified of all of them.
 
-The \exs{namespace} of a timer is an arbitrary value, but in practice is used to associate timers to the triggers that set them, or to keep track of different timer purposes in more custom implementations.
-Often (e.g.\ in the grouping Transform) the namespace is not even read on a timer firing (all timers are treated the same), but rather only employed to clear specific timers before they fire.
+The \exs{namespace} of a timer is an arbitrary value, but in practice is used to associate timers to the triggers that set them, or to keep track of different timer purposes in custom implementations.
+Often (e.g.\ in the Grouping Transform) the namespace is not even read on a timer firing (all timers are treated the same), but rather only employed to clear specific timers before they fire.
 
-It is important to note that no semantics are implied by the timers themselves---they simply provide a mechanism to receive a notification with a particular identifier at a particular time.
-It is up to the transform executor to interpret this and act accordingly.
+It is important to note that no semantics are implied by the timers themselves---they merely provide a mechanism to receive a notification with a particular identifier at a particular time.
+It is up to the Transform Executor to interpret this and act accordingly.
 
-In the case of a grouping Transform, the executor simply asks the trigger driver whether it should fire already.
+In the case of a Grouping Transform, on receiving a timer the Executor asks the trigger driver whether it should fire.
 The trigger has access to the current watermark state, and so can determine whether it is time to fire.
-The flexible implementation means that it could just as well set another timer at this point, enabling strategies such as ``output a pane every five seconds until the end of the window, but only if we've seen 10 elements or more''.
+The flexible implementation means that it another timer could be set at this point, enabling strategies such as `output a pane every five seconds until the end of the window, but only if we've seen 10 elements or more'.
 
 \subsection{Watermark generation and processing}\label{sec:impl:dataflow:watermark-generation}
 
@@ -581,29 +544,29 @@ In \cref{sec:impl:dataflow:lateness} it was asserted that only late input can re
 Late input was also defined as that whose timestamp falls behind the current input watermark.
 The previous sections also detail the exact semantics necessary to preserve watermark correctness along with many useful invariants throughout the whole Pipeline.
 
-However, none of the preceding sections address the question of generating some watermark ``from nothing'' in the first place.
+However, none of the preceding sections address the question of generating a watermark in the first place.
 This process is crucial---as mentioned above, it is the only part of the system in which lateness can be introduced.
 
 It also very application-specific.
 A watermark is an indication of the progress made so far in the event stream.
-For some data sources, we can get a guaranteed-correct position in the stream that we have read up until.
-For others, the source provides us with only an approximations.
+For some data sources, we can get a guaranteed-correct read-position.
+For others, the source provides us with only an approximation.
 In yet other cases, we must keep statistics about the source to generate a heuristic ourselves.
 
 Clearly there is no standard solution---there must be a mechanism to allow flexibility in watermark generation.
-We introduce the standard concept of a \emph{Source}, which can provide a Collection from some external source when coupled with a \verb|Read| Transform.
+We introduce the standard concept of a \emph{Source}, which can produce a Collection from some external source when coupled with a \verb|Read| Transform.
 
-At execution, the \verb|Read| Transform Executor will use logic found in the Source it is given in order to assign timestamps to elements being read (usually an intrinsic timestamp in the case of e.g.\ Kafka messages) and to publish a watermark using any logic and state it needs to, with the only restriction being that it must be monotonically increasing.
+At execution, the \verb|Read| Transform Executor will use logic found in the Source it is given in order to assign timestamps to elements being read (usually an intrinsic timestamp in the case of e.g.\ Kafka messages) and to publish a monotonically increasing watermark.
 Bounded sources with no intrinsic timestamps will generally output a minimal watermark (and timestamp all output with the minimal timestamp) until it is finished, advancing the watermark to the maximal timestamp to indicate that.
 
-Sources for popular data sources such as the file system, Apache Kafka, Google BigQuery and others are included in the Beam implementation, and an API is provided to add custom ones with arbitrary watermark logic (in fact, this API is utilised for the example used in \cref{sec:eval:todo}).
+Sources for popular data sources such as the file system, Apache Kafka, Google BigQuery and others are included in the Beam implementation, and an API is provided to add custom ones with arbitrary watermark logic (in fact, this API is used in \cref{sec:eval:code}).
 
 \subsubsection{Watermark domains}
 
 Forcing the Source to generate the original input watermark works well from a system perspective, providing a single, easily-managed point where lateness can be introduced.
 However, it can cause problems from a user perspective and limit the flexibility of the Model.
 
-Suppose a Pipeline is receiving data containing names of log files being saved off to some cloud storage.
+Suppose a Pipeline is receiving data containing names of log files in cloud storage.
 These files contain log entries collected during a particular day, which are then dumped to storage during log rotation every 24 hours.
 The timestamp of these elements will be the timestamp of the file, which will be \textbf{after} all of the entries in the file.
 
@@ -614,31 +577,32 @@ In fact, these new elements are not late, because they belong in a different \em
 Collections can be thought of as being in the same watermark domain when their elements' timestamps directly relate to one another \textbf{independently of the element data}.
 For example, when extracting body text from a social post, it makes sense to assign the same timestamp to the text as was assigned to the post itself.
 We don't need to actually look at the post to make that decision.
-Similarly, a grouping Transform treats data aggregation and timestamp aggregation orthogonally.
+Similarly, a Grouping Transform treats data aggregation and timestamp aggregation orthogonally.
 
 \todo{diagram}
 
 However, in the log-file example given, the timestamp of an individual log entry generated from a file will be dependent on the data of the log entry itself---the recorded time of its generation.
-We may be able to provide a guarantee such as ``the timestamp of an entry will never be earlier than 24 hours before the timestamp of a file'', but this again is an application-specific decision, unsuitable for inclusion in a generic Model.
+We may be able to provide a guarantee such as `the timestamp of an entry will never be earlier than 24 hours before the timestamp of a file', but this again is an application-specific decision, unsuitable for inclusion in a generic model.
+
 Such a guarantee also constitutes precisely what a watermark is.
 Alas, in order to have a predictable lateness model, we have constrained the output watermark of a Transform to always be less than or equal to its input watermark.
 Shifting our watermark to 24 hours before the input watermark would violate this invariant.
 
-The solution is to break our Pipeline apart into watermark domains.
+The solution is to break our Pipeline into several watermark domains.
 The invariants and relationships described in this chapter hold only within one watermark domain---we are essentially treating each one of these as a mini-Pipeline of its own.
 
-Just how event time and processing time are distinguished, we now treat event time as a \emph{class} of domains rather than a single domain of its own.
+Similarly to how event-time and processing-time are distinguished, we now treat event-time as a \emph{class} of domains rather than a single domain of its own.
 
 The lateness semantics only make sense when applied to data which can all be semantically described with one time domain.
-Once we switch semantic time domains, there is no general algorithmic solution to obtaining the correct watermark---the problem becomes once-again application-specific.
-This is the same problem faced when considering the initial input data into the Pipeline, and so it makes sense that it be solved similarly.
+Once we switch semantic time domains, there is no general solution to obtaining the correct watermark---the problem once-again becomes application-specific.
+This is the same problem faced when considering the initial input data into the Pipeline, and so it makes sense for it to be solved similarly.
 
-It is to introduce the concept of a Transform which initiates a new watermark domain.
-These transforms may directly manage their own input watermark, which does not need to (but can) have a direct relation to their input watermark.
+We introduce a type of Transform which initiates a new watermark domain.
+These Transforms may directly manage their own output watermark, which does not need to (but can) have a formulaic relation to their input watermark.
 
 This, of course, introduces a potential source of lateness at every point such a Transform is placed in the Pipeline.
-However this also semantically makes sense.
-At these points, we are essentially reading a conceptually new, external Collection of elements, with timing information which did not ``exist'' in the Pipeline until this point.
+However this too semantically makes sense.
+At these points, we are essentially reading a conceptually new, external Collection of elements, with timing information which did not exist in the Pipeline until this point.
 Since this information is unavailable before this point, it is impossible for the previous transformations to have taken account of it in determining whether input to the system was late.
 
 The watermark domain solution is the proposal of the author and is not in place in the Beam Model.
@@ -655,7 +619,7 @@ An example of this can be seen in one of the Evaluation examples (\cref{sec:todo
 
 An important component of this project, and one of its original goals, was the design of a readable, approachable DSL for constructing pipelines.
 
-As described in \cref{todo}, Elixir has a widely-used pipeline operator \exs{|>}, and programmers are encouraged to express their programs using series of data transformations.
+As described in \cref{sec:prep:elixir:basics}, Elixir has a commonly-used pipeline operator \exs{|>}, and programmers are encouraged to express their programs using series of data transformations.
 Thus, the Dataflow way of expressing computation translates quite naturally into Elixir, and only a minimal amount of additional syntax is necessary.
 
 \begin{listing}[h]
@@ -686,6 +650,8 @@ We count the number of occurrences of each word, format this information and out
 The code is clear and understandable, and maps very well to the Elixir model of data processing.
 \Cref{fig:todo} shows this Pipeline as a DAG.
 
+\todo{diagram of pipeline}
+
 In line 10, we see the \exs{--} operator being used to assign a label to a particular Transform.
 Assigning labels to transforms is an important feature, very useful for managing and visualising Pipelines.
 This notation evokes the use of \verb|--| to denote a dash in \LaTeX.
@@ -715,7 +681,7 @@ While it would be possible to have the \exs{use Dataflow} statement replace the 
 How then is this entire syntax implemented?
 
 The answer is that \exs{~>} is in fact a macro.
-Elixir macros are powerful tools, allowing arbitrary AST transformation at compile time.
+Elixir macros are powerful tools, allowing arbitrary AST transformation at compile time <ref to bbook>.
 They can also cause unexpected behaviour and confusion, and the convention is to keep their use minimal, relying on functions instead.
 This is why the definition of \exs{~>} is only a few lines long, shown in \cref{lst:impl:elixir-dpipe-macro-def}.
 
@@ -742,22 +708,22 @@ Macros are simply functions which, at compile-time, take the Abstract Syntax Tre
 
 The \exs{~>} macro works by pattern-matching on the structure of the second argument, which will either be an AST node of the form \exs{label -- transform} (line 3) or something else (line 7).
 The macro outputs a new AST node which simply calls the \exs{Dataflow.__apply_transform__} function which contains the Transform application logic.
-This matching at the AST level means that we are free to assign \exs{--} a new meaning only within this expression, without needing to shadow the original meaning for the entire namespace.
+This matching at the AST level means that we are free to assign \exs{--} a new definition only within this expression, without needing to shadow the original meaning for the entire namespace.
 
-Note that we do not have to manually construct this node---the \exs{quote} macro allows us to create one by simply writing syntax and specifying which variables from the macro's environment we want to bind to the environment of the resultant AST node (the \exs{:bind_quoted} option).
+We do not have to manually construct the replacement AST node---the \exs{quote} macro allows us to create one by simply writing syntax and specifying which variables from the macro's environment we want to bind to the environment of the resultant AST node (the \exs{:bind_quoted} option).
 
-The only other piece of ``magic'' present is that the \exs{use Dataflow} line imports the \exs{~>} macro into the top-level namespace so that it can be used straight away.
+The only other piece of magic present is the \exs{use Dataflow} line, which imports the \exs{~>} macro so that it can be used straight away.
 In fact, that line of code simply calls the \exs{Dataflow.__using__} macro.
-In this way, Elixir allows developers to strike a good balance between friendliness and ease-of-use, and the lack of magic and explicitness which is very desirable when things go wrong.
+In this way, Elixir allows developers to strike a good balance between friendliness and ease-of-use, and explicitness, which is very desirable when things go wrong.
 
-Intuitively, the result of an application of the \exs{~>} operator is a Value, which is either a Collection or some compound (e.g.\ a tuple) containing Collections.
+Intuitively, the result of an application of the \exs{~>} operator is a \emph{Value}, which is either a Collection or some compound (e.g.\ a tuple) containing Collections.
 We can hold on to Collections that are returned in this way and apply Transforms to them several times.
 This means that we can create branching Pipelines such as the one in \cref{fig:todo} easily, as shown in \cref{lst:impl:diverging-pipelines}.
 
-Note that in order to instantiate a root Transform (one which produces data obtained outside the system somehow), we apply it to the Pipeline itself.
+In order to instantiate a Root Transform (one which produces data obtained outside the system somehow), we apply it to the Pipeline itself.
 
 \begin{listing}[h]
-	\caption{An example of the creation of a branching Pipeline.}
+	\caption{Branching Pipelines can be created by applying multiple Transforms to the same Collection.}
 	\label{lst:impl:diverging-pipelines}
 	\begin{minted}[autogobble]{elixir}
 pipeline = Pipeline.new
@@ -779,33 +745,35 @@ words
 
 \subsubsection{Structs and protocols}
 
-Since there is a need to separate the construction and execution phases of the Model, the situation cannot be as simple as in \cref{lst:impl:elixir-normal-comparison}, where on passing a value to a ``transformation'', we simply call the function directly.
+Since there is a need to separate the construction and execution phases of the Model, the situation cannot be as simple as in \cref{lst:impl:elixir-normal-comparison}, where on passing a value to a `transformation', we simply call the function directly.
 Instead, we must store the description of the computation in the Pipeline structure.
 
-In order to facilitate this, we make use of Elixir's protocols and structures.
-A structure is simply a map with a special \exs{:__struct__} key, which exhibits some special behaviour at compile-time.
-A structure is always associated with a particular module.
+In order to facilitate this, we make use of Elixir's protocols and structs.
+A struct is a map with a special \exs{:__struct__} key, which exhibits some special behaviour at compile-time.
+A struct is always associated with a particular module.
 
-A protocol is an interface module consisting of a set of functions.
+A protocol is an interface module consisting of a set of function declarations.
 Implementations of a protocol can then be defined on a per-module basis, as long as that module declares a structure.
 When the protocol functions are then called with a structure whose module implements that protocol, the actual function called will be dynamically dispatched to that module.
 
-The functions in the example listings, such as \exs{IO.read_file/1}, don't actually perform any computation themselves---instead, they return a structure which stores the arguments passed in and implements the \exs{PTransform.Callable} protocol.
+The functions in \cref{lst:impl:elixir-construct-pipeline}, such as \exs{IO.read_file}, don't perform any computation themselves---instead, they return a structure which stores the arguments passed in and implements the \exs{PTransform.Callable} protocol.
 For examples, the result of calling \exs{IO.read_file("data.txt")} is \mintinline{elixir}{%IO.ReadFile{filename: "data.txt"}}.
 
 We then see from the definition of \exs{~>} in \cref{lst:impl:elixir-dpipe-macro-def} that these structures are incorporated into the Pipeline by calling the appropriate function which internally uses the protocol.
 
-The definition of the protocol is presented in \cref{lst:impl:ptransform-callable}.
+The definition of the Transform protocol is presented in \cref{lst:impl:ptransform-callable}.
 We see that the only requirement is for the Transform to be able to expand to more Transforms, following the Composite Transforms concept introduced earlier.
 Primitive Transforms are not definable by the user and receive special treatment, but the user is free to define their own Composite Transforms by providing an appropriate structure and module, much like one would define small, composable functions.
-It is technically possible to simply use a function which composes Transforms internally, but this means that this new Transform is not recognised as a node, leading to a poorer experience once visualisation and/or reporting is introduced.
+It is technically possible to use a function which composes Transforms internally, but this means that this new Transform is not recognised as a node, leading to a poorer experience once visualisation and/or reporting is introduced.
+
+\todo{insert PTransform protocol}
 
 \subsubsection{Managing DAGs using asynchronous processes}
 
 \todo{ref to a paper on implementing functional dags in Haskell?}
 
 Constructing and working with DAGs in the absence of mutability, especially when advanced functional features such as those found in e.g.\ Haskell are not available, lies somewhere between impossible and infeasible.
-Instead of attempting to do this, we leverage the concurrency model of Elixir to simulate a mutable map of Collections and Applied Transforms inside the Pipeline structure.
+Instead of attempting to do this, the concurrency model of Elixir was leveraged to simulate a mutable map of Collections and Applied Transforms inside the Pipeline structure.
 
 \todo{mention that Erlang's :digraph library also uses mutable state but is unsuitable for use here?}
 
@@ -814,7 +782,7 @@ This means that it is possible to easily add new structures to the DAG, even in 
 
 It is clear from \cref{lst:impl:diverging-pipelines} that Pipelines behave like mutable objects---merely using the \exs{~>} operator on a Pipeline modifies it.
 Therefore Pipelines in this state are better thought of as processes rather than values.
-However, once the construction of the Pipeline is finished, it is possible to ``freeze'' it and turn it into a simple data structure which once again behaves in the expected manner.
+However, once the construction of the Pipeline is finished, it is possible to freeze it and turn it into a simple data structure which once again behaves in the expected manner.
 Indeed, the \exs{DirectRunner.run} function does this internally before taking this data structure and executing it.
 
 \subsection{Making state explicit}\label{sec:impl:approach:state-explicit}
