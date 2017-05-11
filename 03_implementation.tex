@@ -753,13 +753,13 @@ A struct is a map with a special \exs{:__struct__} key, which exhibits some spec
 A struct is always associated with a particular module.
 
 A protocol is an interface module consisting of a set of function declarations.
-Implementations of a protocol can then be defined on a per-module basis, as long as that module declares a structure.
-When the protocol functions are then called with a structure whose module implements that protocol, the actual function called will be dynamically dispatched to that module.
+Implementations of a protocol can then be defined on a per-module basis, as long as that module declares a struct.
+When the protocol functions are then called with a struct whose module implements that protocol, the actual function called will be dynamically dispatched to that module.
 
-The functions in \cref{lst:impl:elixir-construct-pipeline}, such as \exs{IO.read_file}, don't perform any computation themselves---instead, they return a structure which stores the arguments passed in and implements the \exs{PTransform.Callable} protocol.
-For examples, the result of calling \exs{IO.read_file("data.txt")} is \mintinline{elixir}{%IO.ReadFile{filename: "data.txt"}}.
+The functions in \cref{lst:impl:elixir-construct-pipeline}, such as \exs{IO.read_file}, don't perform any computation themselves---instead, they return a struct which stores the arguments passed in and implements the \exs{PTransform.Callable} protocol.
+For example, the result of calling \exs{IO.read_file("data.txt")}~is \mintinline{elixir}{%IO.ReadFile{filename: "data.txt"}}.
 
-We then see from the definition of \exs{~>} in \cref{lst:impl:elixir-dpipe-macro-def} that these structures are incorporated into the Pipeline by calling the appropriate function which internally uses the protocol.
+The definition of \exs{~>} in \cref{lst:impl:elixir-dpipe-macro-def} shows that these structs are subsequently incorporated into the Pipeline by calling the appropriate function which internally uses the protocol.
 
 The definition of the Transform protocol is presented in \cref{lst:impl:ptransform-callable}.
 We see that the only requirement is for the Transform to be able to expand to more Transforms, following the Composite Transforms concept introduced earlier.
