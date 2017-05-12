@@ -40,7 +40,7 @@ source/sink API\\
 Efforts were made to collect data in similar environments in order to reduce the potential for uncontrolled variation.
 
 All tests were conducted on a single machine, a MacBook Pro (15-inch, Late 2016) with a 2.9GHz Intel Core i7 CPU and 16GB of 2133 MHz RAM running macOS 10.12.4.
-Runtimes used were Elixir 1.4.2 on erts 8.3 and the Oracle JRE v1.8.0\_66-b17.
+Runtimes used were Elixir 1.4.2 on OTP 19 and the Oracle JRE v1.8.0\_66-b17.
 
 Prior to conducting the tests, all non-essential background processes and applications were terminated.
 Tests were initiated using scripts in order to replicate multiple instances of the tests accurately.
@@ -52,6 +52,16 @@ Additionally, the tests were executed multiple times throughout the day and the 
 
 \subsection{Data collection and processing methodologies}\label{sec:eval:approach:collection}
 
+A custom test runner was developed in Elixir for the purpose of scheduling and running tests.
+It could be configured with the tests to be run for both the Java and Elixir implementations.
+Each test was executed via a new system process with configuration passed as command-line arguments.
+A new VM instance was created each time for both Elixir and Java tests to maintain consistency and accuracy.
+
+The test runner measured the CPU and memory usage of the spawned process using the \verb|ps| program.
+Other measurements, such as latency, were taken directly in the executing test and saved to the appropriate directory (as passed by the runner through the command line).
+
+The data were then processed, analysed and plotted using MATLAB.
+Sources for both the test runner and the MATLAB scripts used can be found in \cref{apx:twitter-code}.
 
 \section{The Twitter example}\label{sec:eval:approach:twitter}
 
@@ -71,7 +81,15 @@ Hashtags present were counted per-window.
 They were then expanded into all possible prefixes, retaining counts.
 Finally, a list of the top three hashtag suggestions for each prefix was produced.
 This data could be fed into an autocompletion API, but for the purposes of this exercise was simply printed to console.
-\Cref{fig:todo} illustrates the resultant Pipeline.
+\Cref{fig:eval:twitter-pipeline-dag} illustrates the resultant Pipeline.
+
+\begin{figure}
+	\centering
+	\includegraphics[height=0.5\textheight]{images/temp/eval-twitter-pipeline}
+	\caption[The Twitter example Pipeline as a DAG.]{TODO}
+	\label{fig:eval:twitter-pipeline-dag}
+\end{figure}
+
 
 The scenario provides a good way to test various features of the Model.
 Sliding windowing is used, and multiple stages of aggregation per window is employed.
@@ -259,6 +277,45 @@ While much of the power of the Model comes from its grouping and windowing facil
 
 \subsection{Methodology}
 
-In this experiment, a Pipeline was created in which integer elements were generated in a rate-limited fashion and passed through a series of identity Transforms.
+In this experiment, a Pipeline was created in which integer elements were generated in a rate-limited fashion and passed through a series of \verb|Map| Transforms, each of which incremented the element.
 The latency of each element from the moment of its generation to its output at the last identity Transform was measured.
-The rate of generation of elements and the length of the Pipeline were then varied and the effects of each on the measured latency analysed.
+The length of the Pipeline was varied and the effects of each on element latency analysed.
+CPU and memory usage were also captured at half-second increments.
+
+The experiment was performed with 14 different values for the Pipeline length, ranging from 1 to 2000.
+It is to be noted that at length of above approximately 3000 Transforms, the Java implementation fails with a stack overflow, while the Elixir implementation is able to sustain over 10000 Transforms in the Pipeline with the same linear growth.
+
+Each instance of the experiment was repeated X times, each time running for X seconds.
+The data from each repetition was aggregated together and a mean and standard deviation calculated.
+
+\subsection{Results}
+
+\todo{Let's discuss the data and how I should frame this.}
+
+\todo{Graphs are of course unstyled and untweaked---they won't look like this.}
+
+\begin{figure}
+    \centering
+	\subfloat[][As the number of transforms grows, the mean latency increases roughly linearly. (Discuss std dev. \%STDev grows linearly with no transforms.)]{
+		\includegraphics[height=0.45\textheight]{images/temp/elixir_latency}
+	}
+	
+	\subfloat[][]{
+		\includegraphics[height=0.45\textheight]{images/temp/elixir_memcpu}
+	}
+	\caption[Results of the latency experiment run on the Elixir implementation.]{The Elixir implementation shows predictable, linear resource consumption under load.}
+	\label{fig:eval:latency-graph-elixir}
+\end{figure}
+
+\begin{figure}
+    \centering
+	\subfloat[][]{
+		\includegraphics[height=0.45\textheight]{images/temp/java_latency}
+	}
+	
+	\subfloat[][]{
+		\includegraphics[height=0.45\textheight]{images/temp/java_memcpu}
+	}
+	\caption[Results of the latency experiment run on the Java implementation.]{The Java implementation shows good behaviour at sub-200 Transform levels, before degrading to very poor levels of latency.}
+	\label{fig:eval:latency-graph-java}
+\end{figure}
