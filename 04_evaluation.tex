@@ -86,7 +86,7 @@ This data could be fed into an autocompletion API, but for the purposes of this 
 \begin{figure}
 	\centering
 	\includegraphics[height=0.5\textheight]{images/temp/eval-twitter-pipeline}
-	\caption[The Twitter example Pipeline as a DAG.]{TODO}
+	\caption[The Twitter example Pipeline as a Directed Acyclic Graph.]{TODO}
 	\label{fig:eval:twitter-pipeline-dag}
 \end{figure}
 
@@ -95,7 +95,7 @@ The scenario provides a good way to test various features of the Model.
 Sliding windowing is used, and multiple stages of aggregation per window is employed.
 The Pipeline utilises both Elementwise and Grouping Transforms.
 
-The free stream provided by Twitter delivers only around 100 tweets/second.
+The free stream provided by Twitter delivers only around 50--80 tweets/second.
 Therefore, to exercise the systems and compare their performance under load, both Pipelines included a configurable step which duplicated the tweets by a desired factor, simulating a higher-volume stream.
 
 The key success criterion in this example is not necessarily throughput or latency, due to the bounded amount of input and output per window.
@@ -297,11 +297,11 @@ The data from each repetition was aggregated together and a mean and standard de
 \begin{figure}
     \centering
 	\subfloat[][As the number of transforms grows, the mean latency increases roughly linearly. (Discuss std dev. \%STDev grows linearly with no transforms.)]{
-		\includegraphics[height=0.45\textheight]{images/temp/elixir_latency}
+		\includegraphics[height=0.45\textheight]{images/graphs/elixir_latency}
 	}
 	
 	\subfloat[][]{
-		\includegraphics[height=0.45\textheight]{images/temp/elixir_memcpu}
+		\includegraphics[height=0.45\textheight]{images/graphs/elixir_memcpu}
 	}
 	\caption[Results of the latency experiment run on the Elixir implementation.]{The Elixir implementation shows predictable, linear resource consumption under load.}
 	\label{fig:eval:latency-graph-elixir}
@@ -310,11 +310,11 @@ The data from each repetition was aggregated together and a mean and standard de
 \begin{figure}
     \centering
 	\subfloat[][]{
-		\includegraphics[height=0.45\textheight]{images/temp/java_latency}
+		\includegraphics[height=0.45\textheight]{images/graphs/java_latency}
 	}
 	
 	\subfloat[][]{
-		\includegraphics[height=0.45\textheight]{images/temp/java_memcpu}
+		\includegraphics[height=0.45\textheight]{images/graphs/java_memcpu}
 	}
 	\caption[Results of the latency experiment run on the Java implementation.]{The Java implementation shows good behaviour at sub-200 Transform levels, before degrading to very poor levels of latency.}
 	\label{fig:eval:latency-graph-java}

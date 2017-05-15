@@ -132,9 +132,14 @@
 
 \renewcommand{\theFancyVerbLine}{{\small \arabic{FancyVerbLine}}}
 
+%TC:envir codelisting [] figure
+%TC:envir listing [] figure
+%TC:envir minted []  IGNORE
+%TC:macro \mintinline [IGNORE,IGNORE]
 
+%TC:ignore
 \include{00_front_matter}
-
+%TC:endignore
 \include{01_introduction}
 
 \include{02_preparation}
@@ -145,17 +150,19 @@
 
 \include{05_conclusions}
 
+%TC:ignore
 \printbibliography[title=References]
 
 \begin{appendices}
 	\crefalias{chapter}{appch}
-	\include{99_A_glossary}
-	\include{99_B_twitter_code}
+	\include{99_APX_glossary}
+	\include{99_APX_eval_code}
+	\include{99_APX_lateness}
 	
 	\chapter{Project proposal}
 	%\include{mnj24-project-proposal}
 \end{appendices}
-
+%TC:endignore
 
 
 \end{document}

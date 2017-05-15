@@ -8,7 +8,7 @@
 \textbf{An implementation of Google Dataflow in the Elixir programming language} \\[5mm]
 Computer Science Tripos -- Part II \\[5mm]
 Robinson College \\[5mm]
-XX May 2017 \\[20mm]
+19 May 2017 \\[20mm]
 \fcolorbox{red}{white}{DRAFT}
 \end{center}
 \end{titlepage}
@@ -30,7 +30,7 @@ Supervisor:         &   Dr Alastair Beresford           \\
 \end{tabu}
 }
 \footnotetext[1]{This word count was computed
-using the \texttt{texcount} tool.
+using \texttt{texcount -1 -merge -sum mnj24-dissertation.tex}.
 }
 \stepcounter{footnote}
 
@@ -38,16 +38,21 @@ using the \texttt{texcount} tool.
 
 \section*{Original aims of the project}
 
-\todo{Original aims of the project}
-
+To implement a Domain Specific Language (DSL) for the construction of Apache Beam-compatible Pipelines, as well as an interface to the Java codebase allowing for the execution of these Pipelines using existing Beam software.
 
 \section*{Work completed}
 
-\todo{Work completed}
+A DSL was implemented which required significantly less code to express concepts than the Java API.
+It also adopted standard Elixir idioms.
+A full Beam-like runner was also implemented in Elixir, instead of interfacing with a Java runner.
+
+The runner implemented can execute computation Pipelines expressed in the DSL and contains a subset of features of Beam.
+It displays superior performance under load in terms of resource usage, throughput and latency when compared against the local Beam Java runner.
 
 \section*{Special difficulties}
 
-\todo{Special difficulties}
+None.
+
 \newpage
 \section*{Declaration}
 
