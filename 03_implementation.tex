@@ -98,46 +98,96 @@ A \emph{pane} is an element produced by a Grouping Transform when a trigger fire
 It generally takes the form of a key-value pair.
 For example, a \verb|GroupByKey| will output panes consisting of a key and a list of values which had that key and were in the given window.
 
+\subsection{Watermarks and lateness}\label{sec:impl:dataflow:watermarks}\label{sec:impl:dataflow:lateness}
 
+As mentioned in \cref{sec:prep:dataflow:when}, a \emph{watermark} is a heuristic indicating progress in the event stream.
+
+Theoretically, each Collection has its own watermark, global to the entire system.
+In practice, this is not knowable or even sometimes computable, and so \emph{local watermarks} are used.
+
+\begin{figure}[t]
+	\includegraphics[width=\textwidth]{images/temp/lwm-transform-instantaneous}
+	\caption{An instantaneous view of the watermarks of a particular Transform at a single point in processing time.}
+	\label{fig:impl:lwm-instantaneous}
+\end{figure}
+
+Each Transform has \emph{local input (LIWM)} and \emph{output (LOWM) watermarks}, illustrated in \cref{fig:impl:lwm-instantaneous}.
+Its LIWM is a lower bound on the true watermarks of all its input Collections, and its LOWM is an upper bound on the true watermarks of all its output Collections.
+
+These watermarks are heuristics in their own right.
+Reading the LIWM informs the Transform that no elements earlier than that time will arrive.
+Likewise, when a Transform publishes a LOWM, it is indicating that it will not output any elements timestamped before that time. This induces an intuitive intuition of \emph{doneness}: a Transforms is \emph{done} when its output watermark advances to infinity (since this implies that it will never produce any elements again).
+
+All watermarks are monotonically increasing.
+Further, it is required that (for ordinary Transforms) the LOWM does not advance beyond the LIWM.
+This is because in general, elements retain their timestamp on transformation.
+Allowing the LOWM to overtake the LIWM could place the Transform in a situation where a non-late (abiding by the watermark) input element causes output which would be late (behind the watermark) if emitted.
+
+The above situation would violate a fundamental invariant of the system which is crucial to its design and allows us to reason about the computation in the face of unbounded, unordered data:
+
+\textbf{Only late input can result in lateness anywhere in the system.}
+
+\subsubsection{Lateness}
+
+It is prudent to specify exactly what is meant by \emph{lateness}.
+
+An element added to a Collection is \emph{late} if its timestamp is less than the true watermark of the Collection at the time of addition, and \emph{non-late} otherwise.
+
+Note that this definition uses the true watermark of a Collection.
+To apply it in practice, the correspondence between an element's position with respect to a Transform's local watermarks and its lateness---as defined above---must be clarified.
+\Cref{fig:impl:lateness-knowability} summarises this at a high level.
+
+\begin{figure}[t]
+	\subfloat[][The knowability of the lateness of an element with respect to the LIWM.]{
+		\includegraphics[width=\textwidth]{images/temp/lateness-knowability-input}
+	}\\
+	\subfloat[][The knowability of the lateness of an element with respect to the LOWM.]{
+		\includegraphics[width=\textwidth]{images/temp/lateness-knowability-output}
+	}
+	\caption{The lateness of elements with respect to local watermarks can only approximate their lateness with respect to the true watermark.}
+	\label{fig:impl:lateness-knowability}
+\end{figure}
+
+It is clear that an algorithm must be devised which can deal with incomplete information about the lateness of elements.
+For late elements, it must also decide whether they are late enough to be dropped silently, or rather whether they should be included in a pane of output anyway.
+Further, it must take into account user choices about the strategies to employ and compute the proper labelling of panes as they are output.
+Throughout this, the issue of windows merging at arbitrary times must also be considered.
+
+These issues are resolved through exhaustive case analysis and described in detail by Knowles and Shields in an Apache Beam proposal \cite{BEAM-doc-lateness}.
+The algorithm described therein is implemented both in Beam and in the Elixir version.
+As it is rather lengthy and dry, a high-level overview of the decisions made in its design is presented below instead.
+
+\subsubsection{Grouping Transform algorithm}
+
+The goal of the system is to avoid lateness where possible, without holding back the progression of the Pipeline.
+This means that data which is late at one stage of the Pipeline can be integrated into an output pane which is non-late at the next---perhaps taking advantage of a slower processing speed of the latter stage.
+However, progress cannot be held back intentionally in order to accommodate this process.
+These goals govern the resolution of the uncertainty in \cref{fig:impl:lateness-knowability}, generally erring on the side of treating elements as non-late.
+
+Some requirements are also made of panes.
+For a particular window (per-key), only be one \verb|ON_TIME| pane can be output.
+All \verb|EARLY| panes must be output before it, and all \verb|LATE| panes after it.
+Panes are elements in themselves, and as such have their own timestamp (derived by the algorithm from the timestamps of their source elements).
+It is required that \verb|EARLY| and \verb|ON_TIME| panes be non-late (when treated as elements).
+
+We say an element is \emph{on-time} if it is both deemed to be non-late and it arrives in time to be incorporated into an \verb|ON_TIME| pane.
+The \verb|ON_TIME| pane cannot be output until the watermark has passed the end of the window---in this way, it is certain that all elements which are non-late in actuality will be included in this pane, as well as any `lucky' late elements.
+This additionally implies that any \verb|LATE| pane is derived exclusively from late input elements.
 
 \subsubsection{Watermark holds}
 
-By default, each Transform Executor outputs a watermark which is equivalent to its input watermark, unless the output watermark is held back by a \emph{watermark hold}.
-In that case, the output watermark is the earlier of the two.
-Watermark holds provide a mechanism by which the Grouping Transform logic can hold back the output watermark until it is sure that it can satisfy the invariants described above.
+By default, a Transform's output watermark will be equivalent to its input watermark.
+A Grouping Transform, however, must satisfy the invariants described above.
+For instance, it must ensure that certain panes are output non-late (when viewed as elements).
+Due to the flexible triggering model (described later), this may not necessarily occur in a way synchronised with the input watermark.
+At the same time, it is undesirable to write bespoke watermark-management logic for each Transform separately.
 
-Each Transform Executor has a \emph{watermark manager} which maintains a pair holds (the data hold and end-of-window/garbage-collection hold) per-window-per-key.
-These are maintained separately so that they can be cleared and manipulated individually, but the overall watermark hold is simply their overall minimum.
-Two holds are maintained for each window because some of the logic below requires us to know the data-derived hold even if the hold in effect is derived from the window only.
+Instead, a Transform can specify a \emph{watermark hold} per-window-per-key.
+The output watermark will then be the minimum of the input watermark and the earliest watermark hold set.
+When a pane is output for a particular key and window, its associated hold is cleared, allowing the watermark to advance eventually.
 
-The data hold is, in effect, a reduction over all the element timestamps seen so far.
-The exact reducing function is determined by the OutputTimeFn in use.
-While the default simply sets all element timestamps to the end of their window---therefore making a reduction redundant as all inputs are always the same---other strategies are available such as `use the latest timestamp seen so far'.
-
-\todo{diagrams diagrams diagrams}
-
-The EOW/GC hold is a fallback used when we try to set a hold which cannot be honoured because either the output watermark has already progressed past it, or the input watermark has progressed beyond the EOW and therefore a timer to clear this hold won't be fired.
-If we try to set an element hold in either of those situations, we automatically instead try to set the EOW/GC hold instead.
-
-\todo{the below come out of specific invariants. Referencing them may make this shorter.}
-
-An end-of-window hold is set in two situations:
-\begin{itemize}
-	\item The element is too late with respect to the output watermark to hold it back, but it may still be possible to include the element in an on-time pane.
-	The EOW hold is placed to ensure that pane will not be considered late downstream.
-	\item We must ensure that an on-time pane will be emitted for all windows which saw at least one element, even if that on-time pane is empty.
-	Therefore, we place the EOW hold to ensure that this (possibly empty) pane will not be considered late downstream.
-\end{itemize}
-
-If the input watermark has progressed beyond the end-of-window, we can no longer place the EOW hold since a timer will not fire to clear it.
-Instead, if the allowed lateness is non-zero, we try to set an additional garbage collection hold, which is analogous to the end-of-window hold but ensures that the panes we emit are at least non-droppable in the case they must be late.
-
-When the trigger for a window fires, the hold for that window is cleared.
-However, a garbage-collection hold may still remain for reasons described above.
-
-It is important to keep in mind that when we talk about ``placing a hold'' below, we actually \emph{attempt} to place an element hold with a particular timestamp, at which point the above checks are performed and the appropriate hold set (or, possibly, no hold is set).
-This allows for a decoupling of concerns in the two pieces of logic.
-
+Additional care is needed to ensure that a hold is never placed after it is meant to be cleared, stopping progress.
+An algorithm to ensure this is implemented in Beam \cref{BEAM-code-WatermarkManager} and is summarised in the appendix (\cref{apx:additional:watermark-holds}).
 
 \subsection{Triggers and timers}\label{sec:impl:dataflow:triggers-timers}
 
@@ -146,8 +196,6 @@ However, it is still not clear how they know when they should produce some outpu
 
 The Model's answer to this is the trigger system.
 Triggers were introduced in \cref{sec:prep:dataflow:when}, but this section aims to expand on their semantics and how they function to produce the desired behaviour.
-
-\todo{should `trigger' be capitalised?}
 
 \subsubsection{Triggers as state machines}
 Once again, we draw the distinction between triggers at Pipeline-construction time, where they are simply bundles of configuration, and triggers (trigger drivers) at execution-time, where they do real work.

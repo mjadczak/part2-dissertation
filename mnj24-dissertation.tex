@@ -35,7 +35,7 @@
 \usepackage{hyperref}
 \usepackage[style=ieee]{biblatex}
 \usepackage[capitalise]{cleveref}
-\usepackage[titletoc]{appendix}
+\usepackage[titletoc,title]{appendix}
 \usepackage[margin=2pt]{subfig}
 \usepackage{docmute}   % only needed to allow inclusion of proposal.tex
 
@@ -127,6 +127,9 @@
 
 \setcounter{tocdepth}{2}
 
+
+
+
 %%% BEGIN DOCUMENT
 \begin{document}
 
@@ -138,30 +141,32 @@
 %TC:macro \mintinline [IGNORE,IGNORE]
 
 %TC:ignore
-\include{00_front_matter}
+\input{00_front_matter}
 %TC:endignore
-\include{01_introduction}
+\input{01_introduction}
 
-\include{02_preparation}
+\input{02_preparation}
 
-\include{03_implementation}
+\input{03_implementation}
 
-\include{04_evaluation}
+\input{04_evaluation}
 
-\include{05_conclusions}
+\input{05_conclusions}
 
 %TC:ignore
 \printbibliography[title=References]
 
 \begin{appendices}
-	\crefalias{chapter}{appch}
-	\include{99_APX_glossary}
-	\include{99_APX_eval_code}
-	\include{99_APX_lateness}
+\crefalias{chapter}{appch}
+\renewcommand*{\chapterformat}{%\appendixname~\thechapter\autodot\enskip}
+
+	\input{99_APX_glossary}
+	\input{99_APX_eval_code}
+	\input{99_APX_lateness}
 	
-	\chapter{Project proposal}
-	%\include{mnj24-project-proposal}
+	\input{99_APX_proposal}
 \end{appendices}
+
 %TC:endignore
 
 

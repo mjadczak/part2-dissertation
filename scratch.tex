@@ -1,0 +1,13 @@
+%appendix stuff
+\appendix
+\crefalias{chapter}{appch}
+\renewcommand{\thechapter}{\appendixname~\Alph{chapter}}
+\renewcommand{\thesection}{\Alph{chapter}\autodot\arabic{section}}
+\KOMAoptions{chapterprefix=false}
+\addtocontents{toc}{
+
+\protect\KOMAoptions{chapterentrydots}
+\RedeclareSectionCommand[
+    tocnumwidth=6em
+]{chapter}
+}
