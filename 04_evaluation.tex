@@ -1,8 +1,10 @@
 \chapter{Evaluation}\label{ch:eval}
 
+\todo{make this intro better}
+
 Correctness, performance, and ease of use are three important dimensions along which this project was evaluated.
 
-This section outlines the steps taken to test these, and the results obtained.
+This chapter outlines the steps taken to test these, and the results obtained.
 The data collection and processing methodology is touched upon.
 Known limitations in the implementation are also mentioned.
 
@@ -12,17 +14,21 @@ Known limitations in the implementation are also mentioned.
 The final project weighed in at approximately 3,200 lines of Elixir code (excluding comments, blank lines and tests).
 Approximately 12,000 lines of code were written over the lifetime of the project, illustrating the volatility of the codebase due to evolving requirements.
 
-
+In comparison, the core Beam codebase comprises $\sim$78,000 lines of code, though it implements some functionality which is out-of-scope for the Elixir implementation.
 
 \section{Correctness testing}\label{sec:eval:correctness}
 
 Unit tests were written for individual modules using the ExUnit library <ref>.
 
-\section{Known limitations}\label{sec:eval:limitations}
+\section{Feature analysis}\label{sec:eval:limitations}
 
-This project implements only a core of features from the Beam Model.
-There are many known limitations and missing features.
-Most of these are due to time constraints in the project, compounded with changing assumptions driving some less-than-optimal decisions earlier in the process.
+A standard way to compare features across different runners in the Beam Project is the Capability Matrix \cite{Beam-Cap-Matrix}.
+\Cref{tab:todo} shows the full Beam Capability Matrix augmented with a column detailing the implementation areas of this project.
+
+\todo{include capability matrix}
+
+It is unrealistic to aim to implement the entire feature set of the Beam Model in a Part~II project, but nevertheless a large subset of features was at least partially implemented.
+Due to time constraints in the project, compounded with changing assumptions driving some less-than-optimal decisions earlier in the process, some other features (not included in the matrix) were also omitted.
 
 branching pipelines---need dispatcher\\
 side inputs\\
@@ -30,8 +36,10 @@ type-checking\\
 sessions / unaligned windows in general\\
 source/sink API\\
 
-
-\todo{include capability matrices? Maybe construct one for this implementation? (https://beam.apache.org/documentation/runners/capability-matrix/)}
+Further, several core modules were implemented using na\"ive algorithms to save on time.
+For instance, several of the core processing loops use a priority queue.
+The implementation used is a simple list-based one utilising linear search, instead of a heap-based priority queue.
+In spite of this, the performance of the implementation was excellent, as the rest of this chapter shows.
 
 \section{Approach to empirical evaluation}\label{sec:eval:approach}
 
@@ -58,7 +66,7 @@ Each test was executed via a new system process with configuration passed as com
 A new VM instance was created each time for both Elixir and Java tests to maintain consistency and accuracy.
 
 The test runner measured the CPU and memory usage of the spawned process using the \verb|ps| program.
-Other measurements, such as latency, were taken directly in the executing test and saved to the appropriate directory (as passed by the runner through the command line).
+Other measurements, such as latency, were taken directly in the instrumented binary and saved to the appropriate directory.
 
 The data were then processed, analysed and plotted using MATLAB.
 Sources for both the test runner and the MATLAB scripts used can be found in \cref{apx:twitter-code}.
@@ -289,10 +297,6 @@ Each instance of the experiment was repeated X times, each time running for X se
 The data from each repetition was aggregated together and a mean and standard deviation calculated.
 
 \subsection{Results}
-
-\todo{Let's discuss the data and how I should frame this.}
-
-\todo{Graphs are of course unstyled and untweaked---they won't look like this.}
 
 \begin{figure}
     \centering
