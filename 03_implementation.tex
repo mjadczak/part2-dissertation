@@ -187,7 +187,7 @@ The output watermark will then be the minimum of the input watermark and the ear
 When a pane is output for a particular key and window, its associated hold is cleared, allowing the watermark to advance eventually.
 
 Additional care is needed to ensure that a hold is never placed after it is meant to be cleared, stopping progress.
-An algorithm to ensure this, originating in Beam \cref{BEAM-code-WatermarkManager}, is summarised in the appendix (\cref{apx:additional:watermark-holds}).
+An algorithm to ensure this, originating in Beam \cite{BEAM-code-WatermarkManager}, is summarised in the appendix (\cref{apx:additional:watermark-holds}).
 
 \subsection{Triggers and timers}\label{sec:impl:dataflow:triggers-timers}
 
@@ -292,7 +292,7 @@ This is provided by \emph{Sources}---application-specific code which produces a 
 At execution, the \verb|Read| Transform will use logic found in the Source to assign timestamps to elements being read (usually an intrinsic timestamp in the case of e.g.\ Kafka messages) and to publish a monotonically increasing watermark.
 Bounded sources with no intrinsic timestamps will generally output a minimal watermark (and timestamp all output with the minimal timestamp) until it is finished, advancing the watermark to the maximal timestamp to indicate that.
 
-Sources for popular data sources such as the file system, Apache Kafka, Google BigQuery and others are included in the Beam implementation, and an API \cite{BEAM-code-SourceAPI} is provided to add custom ones with arbitrary watermark logic (in fact, this API is used in \cref{sec:eval:code}).
+Sources for popular data sources such as the file system, Apache Kafka, Google BigQuery and others are included in the Beam implementation, and an API \cite{BEAM-code-SourceAPI} is provided to add custom ones with arbitrary watermark logic (in fact, this API is used in \cref{sec:eval:twitter:code}).
 
 \subsubsection{Watermark domains}
 
@@ -374,7 +374,15 @@ DirectRunner.run pipeline, sync: true
 \Cref{lst:impl:elixir-construct-pipeline} illustrates the API with a simple working example.
 A file which contains a single word on each of its lines is read.
 The number of occurrences of each word is the counted, formatted as a string, and output to another file.
-\Cref{fig:todo} shows this Pipeline as a DAG.
+\Cref{fig:impl:dsl-simple-pipeline} shows this Pipeline as a DAG.
+
+\begin{figure}[h]
+	\centering
+	\includegraphics[width=0.2\textwidth]{images/temp/dsl-simple-pipeline}
+	\caption[A simple Pipeline constructed in \cref{lst:impl:elixir-construct-pipeline}.]{\Cref{lst:impl:elixir-construct-pipeline} constructs a simple Pipeline.}
+	\label{fig:impl:dsl-simple-pipeline}
+\end{figure}
+
 
 \todo{diagram of pipeline}
 
@@ -406,9 +414,9 @@ While it would be possible to have the \exs{use Dataflow} statement redefine the
 Instead, Elixir macros enable this operator to take on a special meaning only in this particular context.
 
 The \exs{~>} operator is a macro.
-Elixir macros are powerful tools, allowing arbitrary AST transformation at compile-time \cite[p.\ todo]{Elixir-Metaprogramming}.
+Elixir macros are powerful tools, allowing arbitrary AST transformation at compile-time \cite[p.~13]{Elixir-Metaprogramming}.
 Its definition (\cref{lst:impl:elixir-dpipe-macro-def}) is short and delegates to a function right after parsing the special syntax.
-This is a convention \cite[p.\ todo]{Elixir-Metaprogramming} which ensures that the macros do not end up causing unintuitive behaviour for the user.
+This is a convention \cite[p.~7]{Elixir-Metaprogramming} which ensures that the macros do not end up causing unintuitive behaviour for the user.
 
 \begin{listing}[h]
 	\caption[The definition of the \exs{~>} macro for constructing Pipelines.]{The \exs{~>} macro is used to construct Pipelines. It transforms domain-specific syntax into simple function calls.}
@@ -449,11 +457,11 @@ This matching at the AST level means that \exs{--} can be redefined only within 
 The \exs{quote} macro allows for the construction of an AST node by writing normal Elixir syntax while specifying which variables from the macro's environment should be bound to the environment of the resultant AST node (the \exs{:bind_quoted} option).
 
 The \exs{use Dataflow} line in the examples imports the \exs{~>} macro implicitly (as well as setting up some module aliases).
-In fact, a \exs{use Module} statement just calls the \exs{Module.__using__} macro \cite[p.\ todo]{Elixir-Metaprogramming}.
+In fact, a \exs{use Module} statement just calls the \exs{Module.__using__} macro \cite[p.~35]{Elixir-Metaprogramming}.
 This convention strikes a balance between boilerplate reduction and explicitness.
 
 The result of an application of the \exs{~>} operator is the \emph{Collection} produced by the applied Transform.
-Branching Pipelines such as the one in \cref{fig:todo} can be created by applying multiple Transforms to one Collection.
+Branching Pipelines such as the one in \cref{fig:impl:dsl-branching-pipeline} can be created by applying multiple Transforms to one Collection.
 This is shown in \cref{lst:impl:diverging-pipelines}.
 
 In order to instantiate a Root Transform (e.g.\ \exs{IO.read_file}), it is applied to the Pipeline itself.
@@ -478,6 +486,13 @@ words
 ~> IO.write_file("top_words.txt")
 	\end{minted}
 \end{listing}
+
+\begin{figure}[h]
+	\centering
+	\includegraphics[width=0.6\textwidth]{images/temp/dsl-branching-pipeline}
+	\caption[A branching Pipeline constructed in \cref{lst:impl:diverging-pipelines}.]{\Cref{lst:impl:diverging-pipelines} constructs a Pipeline with branching---the result of \texttt{ExtractWords} is consumed by two other Transforms.}
+	\label{fig:impl:dsl-branching-pipeline}
+\end{figure}
 
 \subsubsection{Structs and protocols}
 
@@ -540,7 +555,7 @@ This means that it is possible to arbitrarily add new structures to the DAG, eve
 \todo{Explain how NestedState is used to track Transform hierarchy?}
 
 \Cref{lst:impl:diverging-pipelines} shows that Pipelines behave like mutable objects---merely using the \exs{~>} operator on a Pipeline modifies it.
-Therefore Pipelines in this state are better thought of as processes rather than values.
+Therefore, Pipelines in this state are better thought of as processes rather than values.
 However, once the construction of the Pipeline is finished, it is possible to freeze it and turn it into a simple data structure which once again behaves in the expected manner.
 Indeed, the \exs{DirectRunner.run} function does this internally before taking this data structure and executing it.
 

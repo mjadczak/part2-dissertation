@@ -12,29 +12,27 @@ Any special syntax or semantics in code examples will be explained where introdu
 
 \subsection{Language basics}\label{sec:prep:elixir:basics}
 
-\todo{reference elixir lang book here?}
-
 Elixir is a dynamically-typed, garbage-collected functional language.
 Values are immutable and looping behaviours are implemented through recursion, making use of tail-call optimisation, as in many other functional languages.
 
-Elixir has the usual assortment of useful data types including arbitrary-sized integers, arbitrary-sized tuples, lists, maps (dictionaries) and \emph{binaries} (which specialise to strings).
+Elixir has the usual assortment of useful data types including arbitrary-sized integers, arbitrary-sized tuples, lists, maps (dictionaries) and \emph{binaries} (which specialise to strings) \cite[p.~23]{Thomas:2016}.
 
 It also has \emph{atoms}, denoted \exs{:foo}.
 Atoms are constant literals, with their name as their value, and can be compared very efficiently.
 
 As such, atoms are used very often to tag tuples, for example \exs{{:ok, result}}.
 These tagged tuples are very flexible and often replace the role of abstract data types in more classical functional languages.
-Atoms are also often used as keys in maps.
+Atoms are also often used as keys in maps \cite[p.~29]{Thomas:2016}.
 
 Elixir uses modules to organise functions.
-A module is a namespace in which functions and macros, both public and private, can be placed.
-Elixir has first-class functions and supports both creating lambdas and capturing existing functions within modules as lambdas.
+A module is a namespace in which functions and macros, both public and private, can be placed \cite[p.~58]{Thomas:2016}.
+Elixir has first-class functions and supports both creating lambdas and capturing existing functions within modules as lambdas \cite[p.~37]{Thomas:2016}.
 
 All values in Elixir can be serialised in a standard way.
 This includes functions and modules, which are serialised in their bytecode form.
 That property makes it easy to send code over the wire, facilitating the distribution of work across a system.
 
-Elixir has powerful pattern-matching capabilities, available in function heads and \exs{case} expressions.
+Elixir has powerful pattern-matching capabilities, available in function heads and \exs{case} expressions \cite[p.~13]{Thomas:2016}.
 Since all values in the language can be directly expressed syntactically (there are no user-definable types), any value can be directly matched and values such as tuples, maps and lists can be destructured and their contents matched directly.
 \Cref{lst:prep:pattern-matching-example} shows an example combining atoms and pattern matching.
 
@@ -76,8 +74,8 @@ end
 	\end{minted}
 \end{listing}
 
-Elixir has a powerful macro system, which allows for the arbitrary transformation of the Abstract Syntax Tree (AST) at compile-time.
-In fact, most standard language directives such as those which define modules and functions or control program-flow are themselves macros.
+Elixir has a powerful macro system, which allows for the arbitrary transformation of the Abstract Syntax Tree (AST) at compile-time \cite[p.~13]{Elixir-Metaprogramming}.
+In fact, most standard language directives such as those which define modules and functions or control program-flow are themselves macros \cite[p.~21]{Elixir-Metaprogramming}.
 
 Elixir programs often adopt the paradigm of data being transformed by flowing through a pipeline of functions.
 To that end, the convention in Elixir for functions which operate on data is to take the value being transformed as the first argument to the function.
@@ -92,21 +90,21 @@ which is equivalent to
 \begin{minted}[linenos=false]{elixir}
 String.pad_leading(String.capitalize("foo"), 5)		
 \end{minted}
-but expresses the steps in the computation much more clearly.
+but expresses the steps in the computation much more clearly \cite[p.~56]{Thomas:2016}.
 This convention matches the Dataflow Model well, since it too works in terms of defining a pipeline of transformations for data to flow through.
 
 \subsection{Concurrency model and the OTP framework}\label{sec:prep:elixir:otp}
 
-Elixir and Erlang both use \emph{processes}---lightweight user-space threads managed by the VM and scheduled transparently across hardware threads.
+Elixir and Erlang both use \emph{processes}---lightweight user-space threads managed by the VM and scheduled transparently across hardware threads \cite[p.~185]{Thomas:2016}.
 The VM can support many thousands (sometimes millions \cite{elixir-2million-processes}) of processes with a predictable, linear performance curve (rather than a sudden drop in performance under load), making it very suitable for running highly available concurrent systems.
 Processes each have their own heap and can communicate and synchronise through message-passing.
-Data passed in a message is copied between process heaps, isolating their execution.
+Data passed in a message is copied between process heaps, isolating their execution \cite[p.~29]{scalability_erlang_otp}.
 
 The OTP\footnote{
 Once `Open Telecom Platform', the initialism now has no further meaning.
 } framework ships with the standard Erlang distribution and provides tools to develop robust concurrent and distributed systems.
 Processes are organised into supervision trees, with certain processes (\emph{supervisors}) responsible for starting, restarting, and killing child processes.
-In this way crashes can be isolated and handled explicitly and locally, making for more robust and failure-tolerant systems.
+In this way crashes can be isolated and handled explicitly and locally, making for more robust and failure-tolerant systems \cite[p.~169]{scalability_erlang_otp}.
 
 OTP provides powerful concurrency and distribution primitives such as state machines and generic servers which handle many common edge cases and failure modes so prevalent in distributed systems.
 
