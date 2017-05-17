@@ -1,6 +1,6 @@
 \chapter{Additional detail}\label{apx:aditional}
 
-This appendix holds extra detail of some aspects of the system.
+This appendix holds extra detail of some aspects of the Model.
 These are necessary for a working implementation but do not contribute greatly to an overview of the system, and so are excluded from the main text.
 
 \section{Watermark hold internals}\label{apx:additional:watermark-holds}
@@ -47,7 +47,7 @@ This allows for a decoupling of concerns in the two pieces of logic.
 \begin{codelisting}
 	\caption[An implementation of the default trigger as a FSM in Elixir.]{An implementation of the default trigger in Elixir. The trigger fires once at the end of the window, and fires again (indefinitely) on seeing any late data after that. Cf.\ the definition of the \exs{TriggerDriver} behaviour in \cref{lst:impl:trigger_driver}.}
 	\label{lst:apx:additional:default-trigger}
-	\begin{minted}{elixir}
+	\begin{minted}[fontsize={\scriptsize}]{elixir}
 defmodule Dataflow.DirectRunner.TriggerDrivers.Default do
   @behaviour Dataflow.DirectRunner.ReducingEvaluator.TriggerDriver
 

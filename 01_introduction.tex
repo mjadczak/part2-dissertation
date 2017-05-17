@@ -19,14 +19,12 @@ While assorted techniques like windowing and watermark tracking may be applied, 
 
 \section{Motivation for the Dataflow Model}\label{sec:intro:motivation}
 
-These issues drove the development of a new, unified model of data processing at Google ~\cite{Akidau:2015}.
-
-The Dataflow Model provides a unified way of thinking about stream- and batch-oriented processing, resulting in a composable abstraction of computation.
+The Dataflow Model~\cite{Akidau:2015} provides a unified way of thinking about stream- and batch-oriented processing, resulting in a composable abstraction of computation.
 It acknowledges the fact that it is impossible to design a perfect (always correct, low-latency and cheap) system, and instead it allows for tunability across these characteristics.
 
 \Cref{sec:prep:dataflow} dives deep into the Model itself and explains how these aims are achieved, while \cref{ch:impl} contains a detailed overview of the implementation of the Model in practice.
 
-\section{Goals and focus}\label{sec:intro:goals}
+\section{Goals and focus}\label{sec:intro:goals}\label{sec:intro:results}
 
 At the outset, the goal of the project was to write an Elixir-based SDK able to create Pipelines compatible with existing Beam software.
 Several weeks into the research it emerged both that this approach was impractical to achieve, and that the front-end DSL itself was a relatively small task in itself, not suitable to form the entirety of the project.
@@ -36,7 +34,9 @@ However, due to the lack of explicit technical documentation of the Model, it qu
 As explained in \cref{sec:impl:dataflow}, many concepts have to be introduced in order to implement the Model, but they are not described directly in any reference material.
 
 Therefore, a second goal of the project emerged, which proved to be a major focus---to extend and clarify the Dataflow Model with the concepts found in Apache Beam, such that a fuller, implementation-ready description is produced.
-Once this work was completed, the initial goal of implementing a subset of this extended model was additionally achieved.
+Once this work was completed, the initial goal of implementing a subset of this extended model was achieved.
+
+Both of these goals were achieved with success, resulting in the detailed description of the Beam Model (\cref{sec:impl:dataflow} and its implementation (\cref{sec:impl:approach}) which exhibited a cleaner, more intuitive developer interface (\cref{sec:eval:twitter:code}) as well as superior performance under load (\cref{sec:eval:latency}).
 
 \section{Why Elixir?}\label{sec:intro:elixir}
 
@@ -51,10 +51,10 @@ Elixir is a dynamically typed, functional language with no variable mutability.
 It executes on the BEAM VM which can efficiently manage and schedule hundreds of thousands of \emph{processes}---small user-space threads.
 This invites the use of an actor-based model for applications, and indeed this is the standard approach in the Elixir/BEAM ecosystem.
 
-These built-in primitives allow us to closely implement the desired semantics of the Dataflow Model without the overhead of thousands of lines of scheduling, threading and co\"ordinating\footnotemark[1] code (present in the Java implementation).
+These built-in primitives allow us to closely implement the desired semantics of the Dataflow Model without the overhead of thousands of lines of scheduling, threading and co\"ordinating\footnotemark[1] code necessary when using Java.
 
 \footnotetext[1]{
-For the typographically observant reader: the \"{} mark in ``co\"ordinating'' is a diaeresis---one of the two diacritical marks which are part of English natively (the other being the grave, as in ``the learn\`ed scholar'').
+For the typographically observant reader: the \"{} mark in `co\"ordinating' is a diaeresis---one of the two diacritical marks native to English (the other being the grave, as in `the learn\`ed scholar').
 While its use is uncommon in modern English, some publications (notably The New Yorker) still employ it, and including it is the preferred style of the author.
 It is used to indicate that two vowels should be pronounced separately, and not as a diphthong.
 }
@@ -62,7 +62,7 @@ It is used to indicate that two vowels should be pronounced separately, and not 
 \Cref{sec:prep:elixir} gives a brief introduction to the language syntax and semantics.
 
 \section{Previous work}\label{sec:intro:previous}
-Since the publication of the Dataflow paper in 2015~\cite{Akidau:2015}, work has been ongoing to implement the Model in practice.
+Since the publication of the Dataflow paper~\cite{Akidau:2015} in 2015, implementation efforts have been ongoing.
 Initially, Google released the Google Cloud Dataflow product~\cite{CloudDataflow} along with an SDK to allow users to construct data processing pipelines and run them on Google's cloud infrastructure.
 
 In early 2016, Google open-sourced the project and placed it under the care of the Apache Foundation~\cite{ApacheDataflowPost}.
@@ -72,8 +72,8 @@ The project has made excellent progress on these fronts, with a fully-featured S
 Its pipelines can be executed on many systems including the Apache projects Spark, Storm and Flink.
 Google Cloud Dataflow remains a paid product capable of running Beam pipelines at scale, but is now only one of many options for doing so.
 
-Important to mention is an attempt to bring some of the ideas in the Dataflow Model to an idiomatic Elixir-only library, Flow~\cite{ElixirFlow}.
-This drove the development of GenStage~\cite{ElixirGenStage}, a low-level library implementing demand-driven data flow between actor processes, along with an extensible way to route, partition and dispatch that data.
+Valim has used certain ideas from the Dataflow Model in the development of Flow~\cite{ElixirFlow}, an idiomatic Elixir library for parallel computation.
+This drove the development of GenStage~\cite{ElixirGenStage}, a low-level library implementing demand-driven data flow between actor processes.
 The GenStage library forms the backbone of the execution logic in this project, and it is discussed in \cref{sec:impl:approach:concurrency}.
 
 \section{Terminology}\label{sec:intro:terminology}
@@ -87,14 +87,3 @@ Dataflow will be used to refer to the high-level theoretical model, with Beam re
 
 The virtual machine which powers Erlang and Elixir is called the BEAM.
 In this unfortunate case of overloading, the Apache project will be referred to as Beam, with all-uppercase BEAM being reserved for the virtual machine.
-
-\section{Results achieved}\label{sec:intro:results}
-
-Overall, the project was a success.
-Due to highly uncertain requirements which were discovered incrementally as the project progressed, code had to be continually revisited and improved upon, and evaluation of progress was not obvious.
-
-A working implementation of the Model was produced.
-The implementation, while forgoing some features, delivered robust performance and a clean programmer interface, meshing well with existing language conventions.
-
-A significant amount of currently non-existent documentation of the Beam Model was also produced, with some further extensions introduced which solve problems currently being tackled in the Beam Project.
-

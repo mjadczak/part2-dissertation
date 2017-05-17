@@ -44,8 +44,8 @@
 %code highlighting
 \usemintedstyle{tango}
 %\renewcommand{\theFancyVerbLine}{{\small \newstylenums{\arabic{FancyVerbLine}}}}
-\setminted[elixir]{linenos,frame=lines,breaklines}
-\setminted[java]{linenos,frame=lines,breaklines}
+\setminted[elixir]{linenos,frame=lines,breaklines,fontsize={\small}}
+\setminted[java]{linenos,frame=lines,breaklines,fontsize={\small}}
 
 %with line breaks
 \newenvironment{codelisting}{\captionsetup{type=listing}}{}
@@ -140,6 +140,10 @@
 %TC:envir listing [] figure
 %TC:envir minted []  IGNORE
 %TC:macro \mintinline [IGNORE,IGNORE]
+%TC:macro \cite [IGNORE,IGNORE]
+%TC:macro \exs [IGNORE]
+%TC:macro \cref [IGNORE]
+%TC:macro \Cref [IGNORE]
 
 %TC:ignore
 \input{00_front_matter}
@@ -160,7 +164,7 @@
 \begin{appendices}
 \crefalias{chapter}{appch}
 \renewcommand*{\chapterformat}{%\appendixname~\thechapter\autodot\enskip}
-
+\renewcommand{\theFancyVerbLine}{{\scriptsize \arabic{FancyVerbLine}}}
 	\input{99_APX_glossary}
 	\input{99_APX_eval_code}
 	\input{99_APX_lateness}
