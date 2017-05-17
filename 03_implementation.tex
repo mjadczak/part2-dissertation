@@ -187,25 +187,24 @@ The output watermark will then be the minimum of the input watermark and the ear
 When a pane is output for a particular key and window, its associated hold is cleared, allowing the watermark to advance eventually.
 
 Additional care is needed to ensure that a hold is never placed after it is meant to be cleared, stopping progress.
-An algorithm to ensure this is implemented in Beam \cref{BEAM-code-WatermarkManager} and is summarised in the appendix (\cref{apx:additional:watermark-holds}).
+An algorithm to ensure this, originating in Beam \cref{BEAM-code-WatermarkManager}, is summarised in the appendix (\cref{apx:additional:watermark-holds}).
 
 \subsection{Triggers and timers}\label{sec:impl:dataflow:triggers-timers}
 
-In the previous section, we explored how Grouping Transforms accumulate data, ensure that their output watermark is held back until the aggregate is output, and mark their output appropriately to let the downstream know of the type of pane emitted.
-However, it is still not clear how they know when they should produce some output at all.
+The previous section described the methods used to ensure that a consistent lateness model is followed when output is produced by a Grouping Transform.
+It defined rules that manage watermarks and pane labels when output occurs.
 
-The Model's answer to this is the trigger system.
-Triggers were introduced in \cref{sec:prep:dataflow:when}, but this section aims to expand on their semantics and how they function to produce the desired behaviour.
+\emph{Triggers} (introduced in \cref{sec:prep:dataflow:when}) describe when output should be produced at all.
+This section gives an overview of their semantics and implementation.
 
 \subsubsection{Triggers as state machines}
-Once again, we draw the distinction between triggers at Pipeline-construction time, where they are simply bundles of configuration, and triggers (trigger drivers) at execution-time, where they do real work.
-In this second case we can think of triggers as FSMs; indeed, the Beam implementation places its trigger logic in classes extending \verb|TriggerStateMachine|.
+Triggers can be thought of as Finite State Machines (FSMs); indeed, the Beam implementation places its trigger logic in classes extending \verb|TriggerStateMachine|.
 
-A trigger FSM is instantiated per-window-per-key and is used by the main Transform Executor to make decisions on when to output.
-We say that a trigger \emph{fires} when it instructs the Transform Executor to output a pane.
-Note that a trigger firing is binary---if it fires, all the currently accumulated data is output into a pane, which is timestamped and marked appropriately as detailed below.
+A Trigger FSM is instantiated per-window-per-key and is used by the main Transform Executor to make decisions on when to output.
+We say that a Trigger \emph{fires} when it instructs the Transform Executor to output a pane.
+A Trigger firing is binary---if it fires, all the currently accumulated data is output into a pane, which is timestamped and marked appropriately as detailed below.
 
-We can easily see the overall behaviour of the FSM by looking at the \exs{TriggerDriver} behaviour from the Elixir implementation in \cref{lst:impl:trigger_driver}.
+The overall behaviour of the FSM is best showcased by looking at the \exs{TriggerDriver} behaviour\footnote{An Elixir \emph{behaviour} is a contract for a module to implement. An implementing module can then be chosen or provided at runtime and its functions (with signatures conforming to the behaviour) called dynamically by another module.} from the Elixir implementation in \cref{lst:impl:trigger_driver}.
 
 \begin{listing}[h]
 	\begin{minted}{elixir}
@@ -214,6 +213,10 @@ defmodule Dataflow.DirectRunner.ReducingEvaluator.TriggerDriver do
   alias Dataflow.{Trigger, Window}
   
   @opaque state :: any
+  
+  # `timing_manager` is the pid of the Transform's TimingManager.
+  # It allows the TriggerDriver to set and clear timers asynchronously,
+  # as well as reading watermark state
   @callback init(Trigger.t, Window.t, timing_manager :: pid) :: state
   @callback process_element(state, Time.timestamp) :: state
   @callback merge([state], state) :: state
@@ -222,155 +225,133 @@ defmodule Dataflow.DirectRunner.ReducingEvaluator.TriggerDriver do
   @callback finished?(state) :: boolean
 end
 	\end{minted}
-\caption[The \exs{TriggerDriver} behaviour showing the Finite State Machine design of an execution-time trigger.]{The \exs{TriggerDriver} behaviour showing the FSM design of an execution-time trigger. The \exs{timing_manager} passed to the \exs{init} function is the \exs{pid} of the current Transform's timing manager, allowing the trigger driver to set and clear timers and access current watermark state.}
+\caption[The \exs{TriggerDriver} behaviour showing the Finite State Machine design of a Trigger.]{The \exs{TriggerDriver} behaviour shows the FSM design of a Trigger. The functional paradigm of Elixir allows for the clean specification of the semantics as a set of transformations on state.}
 \label{lst:impl:trigger_driver}
 \end{listing}
 
-\todo{Consider using the Elixir type syntax everywhere in this chapter to specify the different structures being talked about (instead of prose)}
+The module's \exs{init} function is called to obtain the Trigger's initial state.
+A series of \exs{process_element} calls then occurs, allowing the Trigger to update its state based on timestamps of incoming elements.
+At any of these calls, the Trigger can also query the watermark positions in order to compute its next state.
+The module may also be asked to \exs{merge} together states for several windows into a new state for the resultant window.
 
-There we see that the FSM is first initialised (\exs{init}) with trigger and window data (along with a handle to a process which allows it to set and clear timers asynchronously, as well as read the watermarks and processing time).
-It then receives a series of \exs{process_element} calls, receiving the timestamps of elements being processed and being allowed to update its state.
-It will optionally be asked to \exs{merge} its state with that of other windows---typically we require that the actual trigger being used is the same in all cases.
+The Trigger itself does not asynchronously notify the Transform of its firing.
+Instead, the Transform will query the Trigger to check if it should fire using \exs{should_fire?}.
+These queries will be the result of timers set by the Trigger itself.
+If the Trigger fires, a pane of output is produced (according to the rules in \cref{sec:impl:dataflow:windows-panes} and the Trigger is notified via the \exs{fired} callback.
 
-Note that the trigger driver itself does not asynchronously notify the transform executor of its firing.
-Instead, the transform executor will ask the trigger driver if it is ready to fire using \exs{should_fire?}.
-If so, a pane of output is produced and the trigger driver is notified via the \exs{fired} callback.
+A Trigger is \emph{closed} or \emph{finished} if it will never fire again.
+The trigger driver can be asked if it is finished using the \exs{finished?} callback.
+At that point it is safe to remove the state associated with the entire window, leaving only a tombstone indicating that new elements placed in this window should be ignored.
+Once the watermark rules indicate that all incoming elements in this window would be silently dropped anyway, this too is cleared.
 
-A trigger is \emph{closed} or \emph{finished} if it will never fire again.
-The trigger driver can be asked if it is finished using the \exs{finished?/1} callback.
-At that point it is safe to garbage-collect the associated window state, leaving only a tombstone indicating that new elements placed in this window should be ignored.
-Once the $\mathit{LIWM}$ passes the GC time of the window, we can delete this tombstone as well.
+The FSM pattern provides great flexibility in specifying triggering behaviour, but keeps the interface to this logic very simple.
+It also allows Triggers to be composed into trees, as the Trigger does not care if it is queried by a Transform or a parent Trigger.
+An example of this pattern is the \verb|AndThen| Trigger, which delegates to one Trigger until it is closed, switching to the second at that point.
 
-It is clear that this model allows great flexibility in specifying exactly when output should occur.
-The FSM can count elements, set timers for particular event or processing times, and flexibly decide if it will fire multiple times.
-The model could also be extended to support punctuations (data-driven triggers) by allowing \exs{process_element} to inspect the element value itself.
-This is not implemented, but being worked on, in Beam <JIRA ref> and was considered out-of-scope for the Elixir implementation.
-
-It should be noted that a standard pattern in the Model is to use composite triggers---for example, a trigger which fires when trigger A \emph{or} trigger B fire, or one which takes a one-time firing trigger A (one which becomes finished after firing once) and instead resets it after each firing, making it able to fire indefinitely.
-This is enabled by the decoupled design of trigger drivers, allowing them to be queried by a parent trigger just as easily as they could be queried by the transform executor itself, resulting in a tree of triggers.
-
-\subsubsection{Example: The default trigger}
-
-The \emph{default trigger} used when no other trigger is explicitly specified fires once when the event watermark passes the end-of-window, and fires again every single time a late element is seen (producing a one-element late pane with that element).
-
-\Cref{lst:impl:default_trigger} illustrates the simple logic needed to accomplish this behaviour.
-\todo{insert listing here, without private helper functions.}
+The \emph{default trigger}---used when no other trigger is explicitly specified---fires once when the input watermark passes the end-of-window, and fires again every single time a late element is seen (producing a one-element late pane).
+The implementation of this default trigger in Elixir can be found in \cref{lst:apx:additional:default-trigger} in the appendix.
 
 \subsubsection{Timers}
 
-Timers are a simple but flexible way to schedule asynchronous action in the future.
+Timers are a way to schedule an asynchronous notification in the future.
 A \emph{timer} is a tuple of \exs{{namespace, time, domain}}\footnotemark, with the \exs{domain} being one of processing-time or event-time.
-A \emph{timing manager} is instantiated per Transform Executor, though it operates asynchronously to the Transform Executor itself.
-It handles watermark management and timers.
 
 \footnotetext
 {
 In Beam, timers also have a unique ID, in order to identify and compare their identity. This is not needed in Elixir, since they can be directly compared value-wise.
 }
 
-Once a timer is set, the timing manager will notify the Transform Executor once it fires.
-This will happen when the input watermark (event time) or clock time (processing time) \textbf{passes} the time of the timer; that is, when the appropriate time measure is \textbf{strictly greater} than the time of the timer.
+Once a timer is set, the Transform will receive an asynchronous notification once it fires.
+This will happen when the input watermark (event-time) or clock time (processing-time) passes the time of the timer; that is, when the appropriate time measure is strictly greater than the time of the timer.
 A maximal event-time timer fires precisely when that time is reached, since time cannot advance past it.
 Multiple timers may fire simultaneously, and the Transform Executor will be notified of all of them.
 
-The \exs{namespace} of a timer is an arbitrary value, but in practice is used to associate timers to the triggers that set them, or to keep track of different timer purposes in custom implementations.
-Often (e.g.\ in the Grouping Transform) the namespace is not even read on a timer firing (all timers are treated the same), but rather only employed to clear specific timers before they fire.
+The \exs{namespace} of a timer is an arbitrary value, but in practice is used to associate timers to the Triggers that set them, or to keep track of different timer purposes in specialised Transforms.
+Often, the namespace is not even used in a timer handling callback (all timers are treated the same), but rather only employed to clear specific timers before they fire.
 
-It is important to note that no semantics are implied by the timers themselves---they merely provide a mechanism to receive a notification with a particular identifier at a particular time.
-It is up to the Transform Executor to interpret this and act accordingly.
-
-In the case of a Grouping Transform, on receiving a timer the Executor asks the trigger driver whether it should fire.
-The trigger has access to the current watermark state, and so can determine whether it is time to fire.
-The flexible implementation means that it another timer could be set at this point, enabling strategies such as `output a pane every five seconds until the end of the window, but only if we've seen 10 elements or more'.
+No semantics are implied by the timers themselves---they merely provide a mechanism to receive a notification with a particular identifier at a particular time.
+It is up to the Transform to interpret this and act accordingly---for example by asking its Trigger whether it is ready to fire.
 
 \subsection{Watermark generation and processing}\label{sec:impl:dataflow:watermark-generation}
 
 \todo{diagram}
 
-In \cref{sec:impl:dataflow:lateness} it was asserted that only late input can result in late data anywhere in the system.
-Late input was also defined as that whose timestamp falls behind the current input watermark.
-The previous sections also detail the exact semantics necessary to preserve watermark correctness along with many useful invariants throughout the whole Pipeline.
+Previous sections address the preservation of the correctness of the watermark and the non-lateness of elements as they pass through a Transform.
+It remains unclear how a watermark is generated initially.
 
-However, none of the preceding sections address the question of generating a watermark in the first place.
-This process is crucial---as mentioned above, it is the only part of the system in which lateness can be introduced.
-
+This process is crucial, as it is the only part of the system in which lateness can be introduced.
 It also very application-specific.
 A watermark is an indication of the progress made so far in the event stream.
 For some data sources, we can get a guaranteed-correct read-position.
 For others, the source provides us with only an approximation.
-In yet other cases, we must keep statistics about the source to generate a heuristic ourselves.
+In yet other cases, statistics must be kept about the source to generate a heuristic.
 
-Clearly there is no standard solution---there must be a mechanism to allow flexibility in watermark generation.
-We introduce the standard concept of a \emph{Source}, which can produce a Collection from some external source when coupled with a \verb|Read| Transform.
+There is no standard solution---a mechanism is needed to allow flexibility in watermark generation.
+This is provided by \emph{Sources}---application-specific code which produces a watermarked Collection when used by a \verb|Read| Transform.
 
-At execution, the \verb|Read| Transform Executor will use logic found in the Source it is given in order to assign timestamps to elements being read (usually an intrinsic timestamp in the case of e.g.\ Kafka messages) and to publish a monotonically increasing watermark.
+At execution, the \verb|Read| Transform will use logic found in the Source to assign timestamps to elements being read (usually an intrinsic timestamp in the case of e.g.\ Kafka messages) and to publish a monotonically increasing watermark.
 Bounded sources with no intrinsic timestamps will generally output a minimal watermark (and timestamp all output with the minimal timestamp) until it is finished, advancing the watermark to the maximal timestamp to indicate that.
 
-Sources for popular data sources such as the file system, Apache Kafka, Google BigQuery and others are included in the Beam implementation, and an API is provided to add custom ones with arbitrary watermark logic (in fact, this API is used in \cref{sec:eval:code}).
+Sources for popular data sources such as the file system, Apache Kafka, Google BigQuery and others are included in the Beam implementation, and an API \cite{BEAM-code-SourceAPI} is provided to add custom ones with arbitrary watermark logic (in fact, this API is used in \cref{sec:eval:code}).
 
 \subsubsection{Watermark domains}
 
-Forcing the Source to generate the original input watermark works well from a system perspective, providing a single, easily-managed point where lateness can be introduced.
+Limiting the generation of watermarks to Sources allows for the safe encapsulation of potentially lateness-introducing code.
 However, it can cause problems from a user perspective and limit the flexibility of the Model.
+Though this problem has been discussed but unaddressed in Beam \cite{Beam-JIRA-watermark-domains}, this project implements a solution.
 
-Suppose a Pipeline is receiving data containing names of log files in cloud storage.
+Suppose a Pipeline receives data containing names of log files in cloud storage.
 These files contain log entries collected during a particular day, which are then dumped to storage during log rotation every 24 hours.
 The timestamp of these elements will be the timestamp of the file, which will be \textbf{after} all of the entries in the file.
 
-This means that if we were to process the file contents in a Transform and output all the log entries within as individual elements, all those elements would have to be output late if they kept their real timestamps.
-They could avoid being dropped by selecting an appropriate value for the allowed lateness, but that is a misuse of the Model and semantically incorrect.
+A Transform which outputs individual log entries given an input file will consistently output late data, as all entries in a log file will be older than the log file timestamp (which is used to generate the watermark in the Pipeline).
+In fact, these new elements should not be considered late, because they belong in a different \emph{watermark domain} than the files containing them.
 
-In fact, these new elements are not late, because they belong in a different \emph{watermark domain} than the files containing them.
-Collections can be thought of as being in the same watermark domain when their elements' timestamps directly relate to one another \textbf{independently of the element data}.
+Collections are in the same watermark domain when their elements' timestamps directly relate to one another \textbf{independently of element data}.
 For example, when extracting body text from a social post, it makes sense to assign the same timestamp to the text as was assigned to the post itself.
 We don't need to actually look at the post to make that decision.
 Similarly, a Grouping Transform treats data aggregation and timestamp aggregation orthogonally.
 
 \todo{diagram}
 
-However, in the log-file example given, the timestamp of an individual log entry generated from a file will be dependent on the data of the log entry itself---the recorded time of its generation.
-We may be able to provide a guarantee such as `the timestamp of an entry will never be earlier than 24 hours before the timestamp of a file', but this again is an application-specific decision, unsuitable for inclusion in a generic model.
+However, in the log-file example above, the timestamp of an individual log entry generated from a file will be dependent on the data of the log entry itself---the recorded time of its generation.
+A guarantee such as `the timestamp of an entry will never be earlier than 24 hours before the timestamp of a file' may exist, but this again is an application-specific decision, unsuitable for inclusion in a generic model.
 
 Such a guarantee also constitutes precisely what a watermark is.
-Alas, in order to have a predictable lateness model, we have constrained the output watermark of a Transform to always be less than or equal to its input watermark.
-Shifting our watermark to 24 hours before the input watermark would violate this invariant.
+This watermark, however, is not computed from the input watermark in a way consistent with the lateness invariants and rules in \cref{sec:impl:dataflow:lateness}.
 
-The solution is to break our Pipeline into several watermark domains.
-The invariants and relationships described in this chapter hold only within one watermark domain---we are essentially treating each one of these as a mini-Pipeline of its own.
-
-Similarly to how event-time and processing-time are distinguished, we now treat event-time as a \emph{class} of domains rather than a single domain of its own.
+The solution is to break the Pipeline into several \emph{watermark domains}.
+The invariants and relationships described in this chapter hold only within one watermark domain and not across them.
 
 The lateness semantics only make sense when applied to data which can all be semantically described with one time domain.
-Once we switch semantic time domains, there is no general solution to obtaining the correct watermark---the problem once-again becomes application-specific.
-This is the same problem faced when considering the initial input data into the Pipeline, and so it makes sense for it to be solved similarly.
+At a domain boundary, there is no general solution to obtaining the correct watermark---the problem once-again becomes application-specific.
+The problem is similar to that of ingesting data into a Pipeline, and it is solved similarly.
 
-We introduce a type of Transform which initiates a new watermark domain.
-These Transforms may directly manage their own output watermark, which does not need to (but can) have a formulaic relation to their input watermark.
+Certain Transforms can declare that they initiate a new watermark domain.
+These Transforms may directly manage their own output watermark with no restrictions on its relation to the input watermark.
 
 This, of course, introduces a potential source of lateness at every point such a Transform is placed in the Pipeline.
-However this too semantically makes sense.
-At these points, we are essentially reading a conceptually new, external Collection of elements, with timing information which did not exist in the Pipeline until this point.
-Since this information is unavailable before this point, it is impossible for the previous transformations to have taken account of it in determining whether input to the system was late.
+However this too is semantically valid.
+At these points, timing information which did not exist in the Pipeline is extracted.
+Since this information is unavailable at earlier stages, it is impossible for previous transformations to have taken account of it in determining whether input to the system was late.
+Instead, its possible effect on the lateness of data is considered as soon as the information is actually known, with the lateness system carrying those effects downstream.
 
-The watermark domain solution is the proposal of the author and is not in place in the Beam Model.
-It is included in the Elixir implementation of the Model.
-There is no accepted general solution to this problem in the Beam community.
-
-The proposed solution also potentially simplifies the original approach to Sources.
-An example of this can be seen in one of the Evaluation examples (\cref{sec:todo}).
-
+This solution also potentially simplifies the original approach to Sources.
+An example of this can be seen in one of the Evaluation examples (\cref{sec:eval:twitter:code}).
 
 \section{The Dataflow Model implemented}\label{sec:impl:approach}
 
 \subsection{The Dataflow DSL}\label{sec:impl:approach:dsl}
 
-An important component of this project, and one of its original goals, was the design of a readable, approachable DSL for constructing pipelines.
+The design of a readable, approachable Domain Specific Language (DSL) for constructing Pipelines was an important component of this project, and one of its original goals.
 
-As described in \cref{sec:prep:elixir:basics}, Elixir has a commonly-used pipeline operator \exs{|>}, and programmers are encouraged to express their programs using series of data transformations.
-Thus, the Dataflow way of expressing computation translates quite naturally into Elixir, and only a minimal amount of additional syntax is necessary.
+
+
+As described in \cref{sec:prep:elixir:basics}, Elixir encourages programmers to express computations as series of data transformations using the pipeline operator \exs{|>}.
+Thus, the Dataflow approach to expressing computation translates naturally into Elixir with only a minimal amount of additional syntax.
 
 \begin{listing}[h]
-	\caption[An example of Pipeline construction in Elixir.]{An example of Pipeline construction in Elixir. A Pipeline is created, and to it are applied Transforms which count the words in a file and output these counts to a new file. The Pipeline is then executed.}
+	\caption[An example of Pipeline construction in Elixir.]{An example of Pipeline construction in Elixir. A Pipeline is created and Transforms which count the words in a file and output these counts to a new file are applied to it. The Pipeline is then executed.}
 	\label{lst:impl:elixir-construct-pipeline}
 	\begin{minted}{elixir}
 use Dataflow
@@ -390,21 +371,19 @@ DirectRunner.run pipeline, sync: true
 	\end{minted}
 \end{listing}
 
-\Cref{lst:impl:elixir-construct-pipeline} illustrates the API with a very simple, but working example.
-We read a file which contains a single word on each of its lines.
-We count the number of occurrences of each word, format this information and output it to another file.
-
-The code is clear and understandable, and maps very well to the Elixir model of data processing.
+\Cref{lst:impl:elixir-construct-pipeline} illustrates the API with a simple working example.
+A file which contains a single word on each of its lines is read.
+The number of occurrences of each word is the counted, formatted as a string, and output to another file.
 \Cref{fig:todo} shows this Pipeline as a DAG.
 
 \todo{diagram of pipeline}
 
-In line 10, we see the \exs{--} operator being used to assign a label to a particular Transform.
-Assigning labels to transforms is an important feature, very useful for managing and visualising Pipelines.
+In line 10, the \exs{--} operator is used to assign a label to a particular Transform.
+Assigning labels to Transforms is a feature useful for managing and visualising Pipelines.
 This notation evokes the use of \verb|--| to denote a dash in \LaTeX.
 
 \begin{listing}[h]
-	\caption{An implementation of the process in \cref{lst:impl:elixir-construct-pipeline} using regular, sequential functions.}
+	\caption[An implementation of the computation in \cref{lst:impl:elixir-construct-pipeline} using standard sequential functions.]{The computation in \cref{lst:impl:elixir-construct-pipeline} can be expressed very similarly using only regular functions in the Elixir standard library.}
 	\label{lst:impl:elixir-normal-comparison}
 	\begin{minted}{elixir}
 input = File.stream!("data/data1.txt")
@@ -417,60 +396,70 @@ input
 	\end{minted}
 \end{listing}
 
-\Cref{lst:impl:elixir-normal-comparison} shows, for comparison, how this process would usually be implemented using normal, sequential processing in Elixir.
-The most obvious difference between this listing and \cref{lst:impl:elixir-normal-comparison} is that in the latter, we include an extra \exs{pipeline} identifier which has to explicitly be \exs{run}.
-This makes sense, as the Model requires us to separate the description of the computation in the construction phase from its execution in the subsequent phase.
+\Cref{lst:impl:elixir-normal-comparison} shows an implementation of the same computation using Elixir standard library functions.
+This shows how closely the Dataflow Pipeline abstraction maps to existing paradigms in Elixir.
 
 \subsubsection{Using macros}
 
-Those with a passing familiarity with Elixir will recognise that \exs{--} is actually the list difference operator.
-While it would be possible to have the \exs{use Dataflow} statement replace the default \exs{--} with a version used for labelling Transforms, it would likely cause confusion.
-How then is this entire syntax implemented?
+In Elixir, \exs{--} is in fact the list difference operator.
+While it would be possible to have the \exs{use Dataflow} statement redefine the \exs{--} operator as one used for labelling Transforms, it would likely cause confusion.
+Instead, Elixir macros enable this operator to take on a special meaning only in this particular context.
 
-The answer is that \exs{~>} is in fact a macro.
-Elixir macros are powerful tools, allowing arbitrary AST transformation at compile time <ref to bbook>.
-They can also cause unexpected behaviour and confusion, and the convention is to keep their use minimal, relying on functions instead.
-This is why the definition of \exs{~>} is only a few lines long, shown in \cref{lst:impl:elixir-dpipe-macro-def}.
+The \exs{~>} operator is a macro.
+Elixir macros are powerful tools, allowing arbitrary AST transformation at compile-time \cite[p.\ todo]{Elixir-Metaprogramming}.
+Its definition (\cref{lst:impl:elixir-dpipe-macro-def}) is short and delegates to a function right after parsing the special syntax.
+This is a convention \cite[p.\ todo]{Elixir-Metaprogramming} which ensures that the macros do not end up causing unintuitive behaviour for the user.
 
 \begin{listing}[h]
-	\caption{The definition of the \exs{~>} macro, showcasing the usefulness and power of Elixir macros.}
+	\caption[The definition of the \exs{~>} macro for constructing Pipelines.]{The \exs{~>} macro is used to construct Pipelines. It transforms domain-specific syntax into simple function calls.}
 	\label{lst:impl:elixir-dpipe-macro-def}
 	\begin{minted}[autogobble]{elixir}
- defmacro pvalue ~> transform_with_label do
+  defmacro pvalue ~> transform_with_label do
     case transform_with_label do
+      # matches an `opts <> transform` AST node
+      {:<>, _, [opts, transform]} ->
+        quote bind_quoted: [pvalue: pvalue, transform: transform, opts: opts] do
+          Dataflow.__apply_transform__(pvalue, transform, opts)
+        end
+        
+      # matches a `label -- transform` AST node
       {:--, _, [label, transform]} ->
         quote bind_quoted: [pvalue: pvalue, transform: transform, label: label] do
-          Dataflow.__apply_transform__(pvalue, transform, label)
+          Dataflow.__apply_transform__(pvalue, transform, label: label)
         end
+      
+      # matches any other AST node
       transform ->
         quote bind_quoted: [pvalue: pvalue, transform: transform] do
-          Dataflow.__apply_transform__(pvalue, transform)
+          Dataflow.__apply_transform__(pvalue, transform, [])
         end
     end
   end
 	\end{minted}
 \end{listing}
 
-Macros are simply functions which, at compile-time, take the Abstract Syntax Trees (ASTs) of their arguments and output an AST with which they are replaced.
+Macros are functions which, at compile-time, take the Abstract Syntax Trees (ASTs) of their arguments and output an AST with which the macro is replaced.
 
-The \exs{~>} macro works by pattern-matching on the structure of the second argument, which will either be an AST node of the form \exs{label -- transform} (line 3) or something else (line 7).
-The macro outputs a new AST node which simply calls the \exs{Dataflow.__apply_transform__} function which contains the Transform application logic.
-This matching at the AST level means that we are free to assign \exs{--} a new definition only within this expression, without needing to shadow the original meaning for the entire namespace.
+The \exs{~>} macro works by pattern-matching on the structure of the second argument, which can be an AST node of the form \exs{label -- transform} (line 10) or something else (line 16).
+The \exs{options <> transform} syntax is also transformed, but is currently used to pass additional options for testing purposes only.
 
-We do not have to manually construct the replacement AST node---the \exs{quote} macro allows us to create one by simply writing syntax and specifying which variables from the macro's environment we want to bind to the environment of the resultant AST node (the \exs{:bind_quoted} option).
+The macro outputs a new AST node which calls the \exs{Dataflow.__apply_transform__} function which contains the Transform application logic.
+This matching at the AST level means that \exs{--} can be redefined only within this context, without needing to shadow the original definition in the entire module.
 
-The only other piece of magic present is the \exs{use Dataflow} line, which imports the \exs{~>} macro so that it can be used straight away.
-In fact, that line of code simply calls the \exs{Dataflow.__using__} macro.
-In this way, Elixir allows developers to strike a good balance between friendliness and ease-of-use, and explicitness, which is very desirable when things go wrong.
+The \exs{quote} macro allows for the construction of an AST node by writing normal Elixir syntax while specifying which variables from the macro's environment should be bound to the environment of the resultant AST node (the \exs{:bind_quoted} option).
 
-Intuitively, the result of an application of the \exs{~>} operator is a \emph{Value}, which is either a Collection or some compound (e.g.\ a tuple) containing Collections.
-We can hold on to Collections that are returned in this way and apply Transforms to them several times.
-This means that we can create branching Pipelines such as the one in \cref{fig:todo} easily, as shown in \cref{lst:impl:diverging-pipelines}.
+The \exs{use Dataflow} line in the examples imports the \exs{~>} macro implicitly (as well as setting up some module aliases).
+In fact, a \exs{use Module} statement just calls the \exs{Module.__using__} macro \cite[p.\ todo]{Elixir-Metaprogramming}.
+This convention strikes a balance between boilerplate reduction and explicitness.
 
-In order to instantiate a Root Transform (one which produces data obtained outside the system somehow), we apply it to the Pipeline itself.
+The result of an application of the \exs{~>} operator is the \emph{Collection} produced by the applied Transform.
+Branching Pipelines such as the one in \cref{fig:todo} can be created by applying multiple Transforms to one Collection.
+This is shown in \cref{lst:impl:diverging-pipelines}.
+
+In order to instantiate a Root Transform (e.g.\ \exs{IO.read_file}), it is applied to the Pipeline itself.
 
 \begin{listing}[h]
-	\caption{Branching Pipelines can be created by applying multiple Transforms to the same Collection.}
+	\caption[An example of creating branching Pipelines through application of multiple Transforms to one Collection.]{Branching Pipelines can be created by applying multiple Transforms to the same Collection.}
 	\label{lst:impl:diverging-pipelines}
 	\begin{minted}[autogobble]{elixir}
 pipeline = Pipeline.new
@@ -492,30 +481,49 @@ words
 
 \subsubsection{Structs and protocols}
 
-Since there is a need to separate the construction and execution phases of the Model, the situation cannot be as simple as in \cref{lst:impl:elixir-normal-comparison}, where on passing a value to a `transformation', we simply call the function directly.
-Instead, we must store the description of the computation in the Pipeline structure.
+Since there is a need to separate the construction and execution phases of the Model, a different approach is needed than in \cref{lst:impl:elixir-normal-comparison}, where on passing a value to a `transformation', the function is called directly.
+Instead, the description of the computation must be stored in the Pipeline structure.
 
-In order to facilitate this, we make use of Elixir's protocols and structs.
-A struct is a map with a special \exs{:__struct__} key, which exhibits some special behaviour at compile-time.
+Elixir's protocols and structs are used in order to facilitate this.
+A struct is a map with a \exs{:__struct__} key indicating its defining module.
+It exhibits some special behaviour at compile-time, such as validation of key names.
 A struct is always associated with a particular module.
 
 A protocol is an interface module consisting of a set of function declarations.
-Implementations of a protocol can then be defined on a per-module basis, as long as that module declares a struct.
-When the protocol functions are then called with a struct whose module implements that protocol, the actual function called will be dynamically dispatched to that module.
+Implementations of a protocol can then be defined on a per-module basis.
+Protocol functions use dynamic dispatch to execute the correct implementation of the function given a struct argument.
 
-The functions in \cref{lst:impl:elixir-construct-pipeline}, such as \exs{IO.read_file}, don't perform any computation themselves---instead, they return a struct which stores the arguments passed in and implements the \exs{PTransform.Callable} protocol.
-For example, the result of calling \linebreak \exs{IO.read_file("data.txt")} is \mintinline{elixir}{
-%IO.ReadFile{filename: "data.txt"}
+\begin{sloppypar}
+The functions in \cref{lst:impl:elixir-construct-pipeline}, such as \exs{IO.read_file}, don't perform any computation themselves---instead, they return a struct which stores their arguments and implements the \exs{PTransform.Callable} protocol.
+For example, the result of calling \exs{IO.read_file("data.txt")} is \mintinline{elixir}{%IO.ReadFile{filename: "data.txt"}
 }.
+\end{sloppypar}
 
 The definition of \exs{~>} in \cref{lst:impl:elixir-dpipe-macro-def} shows that these structs are subsequently incorporated into the Pipeline by calling the appropriate function which internally uses the protocol.
 
 The definition of the Transform protocol is presented in \cref{lst:impl:ptransform-callable}.
-We see that the only requirement is for the Transform to be able to expand to more Transforms, following the Composite Transforms concept introduced earlier.
+The only requirement is for the Transform to be able to expand to more Transforms, behaving like Composite Transforms introduced in \cref{sec:impl:dataflow:pipelines-transforms-collections}.
 Primitive Transforms are not definable by the user and receive special treatment, but the user is free to define their own Composite Transforms by providing an appropriate structure and module, much like one would define small, composable functions.
-It is technically possible to use a function which composes Transforms internally, but this means that this new Transform is not recognised as a node, leading to a poorer experience once visualisation and/or reporting is introduced.
 
-\todo{insert PTransform protocol}
+\begin{codelisting}
+	\caption[The definition of the \exs{PTransform.Callable} protocol.]{The \exs{PTransform.Callable} protocol specifies that for a struct to describe a Transform, it must be able to \exs{expand} into sub-Transforms based on its input and parameters.}
+	\label{lst:impl:ptransform-callable}
+	\begin{minted}[autogobble]{elixir}
+  defprotocol PTransform.Callable do
+    # NestedState is a struct used on Pipeline construction to keep
+    # track of Transform hierarchy.
+    # User-defined Transforms can just treat it like a Collection.
+    # 
+    # a PValue is either a Collection, or a compound structure (e.g. tuple)
+    # containing Collections.
+    @spec expand(transform :: t, input :: Dataflow.Pipeline.NestedState.t)
+            :: Dataflow.PValue.t
+    def expand(transform, input)
+  end
+	\end{minted}
+	
+\end{codelisting}
+
 
 \subsubsection{Managing DAGs using asynchronous processes}
 
@@ -526,24 +534,17 @@ Instead of attempting to do this, the concurrency model of Elixir was leveraged 
 
 \todo{mention that Erlang's :digraph library also uses mutable state but is unsuitable for use here?}
 
-The call to \exs{Pipeline.new} actually starts a new process which contains a map of the Collections (edges) and Applied Transforms (nodes) in the Pipeline graph, indexed by a unique integer ID.
-This means that it is possible to easily add new structures to the DAG, even in the face of Composite Transforms or branching Pipelines.
+The call to \exs{Pipeline.new} starts a new process which contains a map of the Collections (edges) and Applied Transforms (nodes) in the Pipeline graph, indexed by a unique integer ID.
+This means that it is possible to arbitrarily add new structures to the DAG, even in the face of Composite Transforms or branching Pipelines.
 
-It is clear from \cref{lst:impl:diverging-pipelines} that Pipelines behave like mutable objects---merely using the \exs{~>} operator on a Pipeline modifies it.
+\todo{Explain how NestedState is used to track Transform hierarchy?}
+
+\Cref{lst:impl:diverging-pipelines} shows that Pipelines behave like mutable objects---merely using the \exs{~>} operator on a Pipeline modifies it.
 Therefore Pipelines in this state are better thought of as processes rather than values.
 However, once the construction of the Pipeline is finished, it is possible to freeze it and turn it into a simple data structure which once again behaves in the expected manner.
 Indeed, the \exs{DirectRunner.run} function does this internally before taking this data structure and executing it.
 
-\subsection{Making state explicit}\label{sec:impl:approach:state-explicit}
+\subsection{Managing concurrency with OTP}\label{sec:impl:approach:concurrency}
 
-\todo{discuss moving from a stateful approach where things can just grab state out of thin air and mutate it, into an explicit approach of functions taking state and returning a modified version of the state. Also expand on how this forces greater focus on what a particular function actually does as it needs to explicitly receive things it needs, and explicitly return things it touches/modifies.}
+\todo{OTP, DirectRunner, GenServers, Supervisors, GenStage, TimingManager/ReducingEvaluator}
 
-\subsection{Managing concurrency with OTP and GenServers}\label{sec:impl:approach:concurrency}
-
-\todo{Introduce the concept of OTP, GenServers and how they provide robust, serialised concurrency. Make clear how building on top of these core libraries is advantageous and appropriate. Mention how clear semantics enable concurrency design.}
-
-\subsection{The GenStage library}\label{sec:impl:approach:genstage}
-
-\todo{Introduce concept of GenStage and how it builds on GenServer. Mention how its operation is a great fit for the type of computation being done in Dataflow.}
-
-\subsection{Extensibility using behaviours and protocols}\label{sec:impl:approach:extensibility}
