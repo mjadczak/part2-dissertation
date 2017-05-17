@@ -15,24 +15,24 @@ Any special syntax or semantics in code examples will be explained where introdu
 Elixir is a dynamically-typed, garbage-collected functional language.
 Values are immutable and looping behaviours are implemented through recursion, making use of tail-call optimisation, as in many other functional languages.
 
-Elixir has the usual assortment of useful data types including arbitrary-sized integers, arbitrary-sized tuples, lists, maps (dictionaries) and \emph{binaries} (which specialise to strings) \cite[p.~23]{Thomas:2016}.
+Elixir has the usual assortment of useful data types including arbitrary-sized integers, arbitrary-sized tuples, lists, maps (dictionaries) and \emph{binaries} (which specialise to strings)~\cite[p.~23]{Thomas:2016}.
 
 It also has \emph{atoms}, denoted \exs{:foo}.
 Atoms are constant literals, with their name as their value, and can be compared very efficiently.
 
 As such, atoms are used very often to tag tuples, for example \exs{{:ok, result}}.
 These tagged tuples are very flexible and often replace the role of abstract data types in more classical functional languages.
-Atoms are also often used as keys in maps \cite[p.~29]{Thomas:2016}.
+Atoms are also often used as keys in maps~\cite[p.~29]{Thomas:2016}.
 
 Elixir uses modules to organise functions.
-A module is a namespace in which functions and macros, both public and private, can be placed \cite[p.~58]{Thomas:2016}.
-Elixir has first-class functions and supports both creating lambdas and capturing existing functions within modules as lambdas \cite[p.~37]{Thomas:2016}.
+A module is a namespace in which functions and macros, both public and private, can be placed~\cite[p.~58]{Thomas:2016}.
+Elixir has first-class functions and supports both creating lambdas and capturing existing functions within modules as lambdas~\cite[p.~37]{Thomas:2016}.
 
 All values in Elixir can be serialised in a standard way.
 This includes functions and modules, which are serialised in their bytecode form.
 That property makes it easy to send code over the wire, facilitating the distribution of work across a system.
 
-Elixir has powerful pattern-matching capabilities, available in function heads and \exs{case} expressions \cite[p.~13]{Thomas:2016}.
+Elixir has powerful pattern-matching capabilities, available in function heads and \exs{case} expressions~\cite[p.~13]{Thomas:2016}.
 Since all values in the language can be directly expressed syntactically (there are no user-definable types), any value can be directly matched and values such as tuples, maps and lists can be destructured and their contents matched directly.
 \Cref{lst:prep:pattern-matching-example} shows an example combining atoms and pattern matching.
 
@@ -74,8 +74,8 @@ end
 	\end{minted}
 \end{listing}
 
-Elixir has a powerful macro system, which allows for the arbitrary transformation of the Abstract Syntax Tree (AST) at compile-time \cite[p.~13]{Elixir-Metaprogramming}.
-In fact, most standard language directives such as those which define modules and functions or control program-flow are themselves macros \cite[p.~21]{Elixir-Metaprogramming}.
+Elixir has a powerful macro system, which allows for the arbitrary transformation of the Abstract Syntax Tree (AST) at compile-time~\cite[p.~13]{Elixir-Metaprogramming}.
+In fact, most standard language directives such as those which define modules and functions or control program-flow are themselves macros~\cite[p.~21]{Elixir-Metaprogramming}.
 
 Elixir programs often adopt the paradigm of data being transformed by flowing through a pipeline of functions.
 To that end, the convention in Elixir for functions which operate on data is to take the value being transformed as the first argument to the function.
@@ -90,21 +90,21 @@ which is equivalent to
 \begin{minted}[linenos=false]{elixir}
 String.pad_leading(String.capitalize("foo"), 5)		
 \end{minted}
-but expresses the steps in the computation much more clearly \cite[p.~56]{Thomas:2016}.
+but expresses the steps in the computation much more clearly~\cite[p.~56]{Thomas:2016}.
 This convention matches the Dataflow Model well, since it too works in terms of defining a pipeline of transformations for data to flow through.
 
 \subsection{Concurrency model and the OTP framework}\label{sec:prep:elixir:otp}
 
-Elixir and Erlang both use \emph{processes}---lightweight user-space threads managed by the VM and scheduled transparently across hardware threads \cite[p.~185]{Thomas:2016}.
-The VM can support many thousands (sometimes millions \cite{elixir-2million-processes}) of processes with a predictable, linear performance curve (rather than a sudden drop in performance under load), making it very suitable for running highly available concurrent systems.
+Elixir and Erlang both use \emph{processes}---lightweight user-space threads managed by the VM and scheduled transparently across hardware threads~\cite[p.~185]{Thomas:2016}.
+The VM can support many thousands (sometimes millions~\cite{elixir-2million-processes}) of processes with a predictable, linear performance curve (rather than a sudden drop in performance under load), making it very suitable for running highly available concurrent systems.
 Processes each have their own heap and can communicate and synchronise through message-passing.
-Data passed in a message is copied between process heaps, isolating their execution \cite[p.~29]{scalability_erlang_otp}.
+Data passed in a message is copied between process heaps, isolating their execution~\cite[p.~29]{scalability_erlang_otp}.
 
 The OTP\footnote{
 Once `Open Telecom Platform', the initialism now has no further meaning.
 } framework ships with the standard Erlang distribution and provides tools to develop robust concurrent and distributed systems.
 Processes are organised into supervision trees, with certain processes (\emph{supervisors}) responsible for starting, restarting, and killing child processes.
-In this way crashes can be isolated and handled explicitly and locally, making for more robust and failure-tolerant systems \cite[p.~169]{scalability_erlang_otp}.
+In this way crashes can be isolated and handled explicitly and locally, making for more robust and failure-tolerant systems~\cite[p.~169]{scalability_erlang_otp}.
 
 OTP provides powerful concurrency and distribution primitives such as state machines and generic servers which handle many common edge cases and failure modes so prevalent in distributed systems.
 
@@ -115,12 +115,12 @@ A full, production-ready, distributed implementation of the Model in Elixir woul
 
 \section{The Dataflow Model explained}\label{sec:prep:dataflow}
 
-This section summarises the Model as it was presented originally \cite{Akidau:2015} in preparation for its extension (\cref{sec:impl:dataflow}) and implementation (\cref{sec:impl:approach}) in the following chapter.
+This section summarises the Model as it was presented originally~\cite{Akidau:2015} in preparation for its extension (\cref{sec:impl:dataflow}) and implementation (\cref{sec:impl:approach}) in the following chapter.
 
 The Dataflow Model is a unified model of data processing which can subsume other abstractions, placing them in a well-defined taxonomy and allowing for the efficient execution of disparate computations on one system.
 
 It does this by decoupling the logical notion of data processing from the underlying physical implementation.
-An abstract data processing model is defined which allows the orthogonal specification of \textbf{what} results are computed, \textbf{where} in event-time they are computed, \textbf{when} in processing-time they are materialised, and \textbf{how} earlier results relate to later refinements \cite[p.~1793]{Akidau:2015}.
+An abstract data processing model is defined which allows the orthogonal specification of \textbf{what} results are computed, \textbf{where} in event-time they are computed, \textbf{when} in processing-time they are materialised, and \textbf{how} earlier results relate to later refinements~\cite[p.~1793]{Akidau:2015}.
 
 This standard model can then be implemented and realised by many different \emph{runners}, whether natively batch, streaming or hybrid. 
 Such a runner determines its own execution strategies while producing output consistent with the Model.
@@ -167,7 +167,7 @@ The data flowing at execution-time is made up of elements which can be thought o
 All Transforms can be represented fundamentally using only two primitives: \verb|ParDo| and \verb|GroupByKey|\footnotemark[2], illustrated in \cref{fig:prep:pardo-gbk}.
 
 \footnotetext[2]{
-Even though these Transforms are the only primitives mentioned in the original description of the Model \cite[§2.1]{Akidau:2015}, real implementations will likely special-case several other transforms such as \texttt{AssignTimestamps} or \texttt{Window} and make them primitives for architectural or performance reasons.
+Even though these Transforms are the only primitives mentioned in the original description of the Model~\cite[§2.1]{Akidau:2015}, real implementations will likely special-case several other transforms such as \texttt{AssignTimestamps} or \texttt{Window} and make them primitives for architectural or performance reasons.
 }
 
 \begin{figure}[h]
@@ -324,7 +324,7 @@ To provide these advantages, however, a considerable amount of extra machinery i
 The Model allows for the selection of a \emph{refinement mode} to be used when emitting multiple panes per window.
 Each pane can either contain all of the information seen from the start of the window---the \emph{accumulating mode}, or it can only contain the information seen since the last pane was emitted---the \emph{discarding mode}.
 
-While the Model broadly defines retractions and how they work at a high level, their implementation remains an unsolved problem and is is an area of research in the Beam project \cite{JIRA-retractions}.
+While the Model broadly defines retractions and how they work at a high level, their implementation remains an unsolved problem and is is an area of research in the Beam project~\cite{JIRA-retractions}.
 As such, this topic is out-of-scope for this project.
 
 \section{Changing goals}\label{sec:prep:goals}
@@ -336,7 +336,7 @@ Rather, informal proposals were written and iterated upon in code.
 Therefore, the extraction of these concepts from the Java codebase into a more approachable model formed a large part of the project.
 This was further necessitated by the move from OOP to a functional approach, requiring each concept to be reduced to an abstract description rather than merely transferring the class hierarchy to a new language.
 
-The initial project plan did not account for this---it was assumed that a reasonable implementation could be produced from the Dataflow paper \cite{Akidau:2015} using the Beam code simply as reference.
+The initial project plan did not account for this---it was assumed that a reasonable implementation could be produced from the Dataflow paper~\cite{Akidau:2015} using the Beam code simply as reference.
 
 \section{Software Engineering methods}\label{sec:prep:softeng}
 
@@ -349,7 +349,7 @@ Often, core modules had to be re\"implemented as the model being extracted grew 
 
 The Elixir language, with its modular structure and a convention of writing simple, composable functions enabled a flexible model where key logic in the codebase could be refactored with ease when needed.
 
-A spiral model \cite{Boehm:1986} of development was adopted with core modules prototyped, integrated, and then refactored, extended or rewritten as other parts of the system demanded it.
+A spiral model~\cite{Boehm:1986} of development was adopted with core modules prototyped, integrated, and then refactored, extended or rewritten as other parts of the system demanded it.
 The process is illustrated in \cref{fig:prep:spiral-model}.
 
 Overall, three or four iterations of prototyping and evaluating were performed, going from a basic proof-of-concept to a working system implementing many key features of the Model.

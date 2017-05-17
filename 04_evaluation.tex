@@ -22,10 +22,53 @@ Unit tests were written for individual modules using the ExUnit library <ref>.
 
 \section{Feature analysis}\label{sec:eval:limitations}
 
-A standard way to compare features across different runners in the Beam Project is the Capability Matrix \cite{Beam-Cap-Matrix}.
-\Cref{tab:todo} shows the full Beam Capability Matrix augmented with a column detailing the implementation areas of this project.
-
-\todo{include capability matrix}
+A standard way to compare features across different runners in the Beam Project is the Capability Matrix~\cite{Beam-Cap-Matrix}.
+\Cref{tab:eval:capability}	 shows the full Beam Capability Matrix augmented with a column detailing the implementation areas of this project.
+\newcommand{\pmark}{$\sim$}
+\begin{table}
+	\caption[Apache Beam Capability Matrix including the Elixir implementation.]{The Capability Matrix~\cite{Beam-Cap-Matrix} compares support for Beam Model features across implementations. The~\pmark~symbol indicates a partial implementation.}
+	\label{tab:eval:capability}	
+	\tabulinesep=1.5mm
+	\begin{tabu}{|X[2.8,r,m]|X[c,m]|X[c,m]|X[c,m]|X[c,m]|X[c,m]|} \firsthline
+		& \textbf{Beam Model} & \textbf{Google Cloud Dataflow} & \textbf{Apache Flink} & \textbf{Apache Spark} & \textbf{Elixir} \\ \hline\hline
+		
+		\multicolumn6{|c|}{\textbf{What is being computed?}} \\ \hline
+		%\tabuphantomline
+		ParDo & \cmark & \cmark & \cmark & \cmark & \cmark \\ \hline
+		GroupByKey & \cmark & \cmark & \cmark & \pmark & \cmark \\ \hline
+		Flatten & \cmark & \cmark & \cmark & \cmark & \xmark \\ \hline
+		Combine & \cmark & \cmark & \cmark & \cmark & \cmark \\ \hline
+		Composite Transforms & \cmark & \pmark & \pmark & \pmark & \pmark \\ \hline
+		Side Inputs & \cmark & \cmark & \cmark & \cmark & \xmark \\ \hline
+		Aggregators & \pmark & \pmark & \pmark & \pmark & \xmark \\ \hline
+		Stateful processing & \cmark & \pmark & \pmark & \xmark & \xmark \\ \hline\hline
+		
+		\multicolumn6{|c|}{\textbf{Where in event-time?}} \\ \hline
+		Global windows & \cmark & \cmark & \cmark & \cmark & \cmark \\ \hline
+		Fixed windows & \cmark & \cmark & \cmark & \cmark & \cmark \\ \hline
+		Sliding windows & \cmark & \cmark & \cmark & \cmark & \cmark \\ \hline
+		Session windows & \cmark & \cmark & \cmark & \cmark & \pmark \\ \hline
+		Custom windows & \cmark & \cmark & \cmark & \cmark & \cmark \\ \hline
+		Custom merging windows & \cmark & \cmark & \cmark & \cmark & \pmark \\ \hline
+		Timestamp control & \cmark & \cmark & \cmark & \cmark & \cmark \\ \hline
+		Watermark domains & \xmark & \xmark & \xmark & \xmark & \cmark \\ \hline \hline
+		
+		\multicolumn6{|c|}{\textbf{When in processing-time?}} \\ \hline
+		Configurable triggering & \cmark & \cmark & \cmark & \xmark & \cmark \\ \hline
+		Event-time triggers & \cmark & \cmark & \cmark & \xmark & \cmark \\ \hline
+		Processing-time triggers & \cmark & \cmark & \cmark & \cmark & \xmark \\ \hline
+		Count triggers & \cmark & \cmark & \cmark & \xmark & \pmark \\ \hline
+		(Meta)data-driven triggers & \xmark & \xmark & \xmark & \xmark & \xmark \\ \hline
+		Composite triggers & \cmark & \cmark & \cmark & \xmark & \pmark \\ \hline
+		Allowed lateness & \cmark & \cmark & \cmark & \xmark & \cmark \\ \hline
+		Timers & \cmark & \pmark & \pmark & \xmark & \pmark \\ \hline \hline
+		
+		\multicolumn6{|c|}{\textbf{How do refinements relate?}} \\ \hline
+		Discarding mode & \cmark & \cmark & \cmark & \cmark & \cmark \\ \hline
+		Accumulating mode & \cmark & \cmark & \cmark & \xmark & \cmark \\ \hline
+		Retractions & \xmark & \xmark & \xmark & \xmark & \xmark \\ \lasthline
+	\end{tabu}
+\end{table}
 
 It is unrealistic to aim to implement the entire feature set of the Beam Model in a Part~II project, but nevertheless a large subset of features was at least partially implemented.
 Due to time constraints in the project, compounded with changing assumptions driving some less-than-optimal decisions earlier in the process, some other features (not included in the matrix) were also omitted.
@@ -81,7 +124,7 @@ The hashtag can then be used to aggregate and list all of these tweets, perhaps 
 It is reasonable, therefore, that an autocomplete functionality may be useful for hashtag entry, to suggest popular hashtags and discourage misspellings.
 This real-world scenario formed the basis of this evaluation exercise.
 
-Twitter's free streaming API \cite{TwitterStreamingAPI} was used to receive a stream of English-language tweets on particular topics.
+Twitter's free streaming API~\cite{TwitterStreamingAPI} was used to receive a stream of English-language tweets on particular topics.
 The terms `tracked' to select topics were \texttt{["tech", "technology", "Apple", "Google", "Twitter", "Facebook", "Microsoft", "iPhone", "Mac", "Android", "computers", "CompSci", "science"]}.
 
 The tweets were windowed using sliding windows and then processed further.

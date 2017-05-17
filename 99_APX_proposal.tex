@@ -26,11 +26,11 @@ Originators: Alastair Beresford and Martin Kleppmann
 
 \section*{Introduction}
 
-As various business services become ever more realtime, there is a strengthening shift to processing of unbounded data---running streams of data through pipelines of transformations rather than running batch processes on static data. Furthermore, there may be sophisticated requirements of the data pipelines, including the need to apply event-time ordering and window the data by features of the data points themselves. The Dataflow Model due to Google \cite{Akidau:2015} attempts to create a consolidated abstraction of such data processing, whilst allowing for flexible tuning of the system between correctness, latency and cost. The Dataflow layer manages the complicated semantics of the pipelines, delegating the actual batch and stream processing itself to external tools or ``runners''.
+As various business services become ever more realtime, there is a strengthening shift to processing of unbounded data---running streams of data through pipelines of transformations rather than running batch processes on static data. Furthermore, there may be sophisticated requirements of the data pipelines, including the need to apply event-time ordering and window the data by features of the data points themselves. The Dataflow Model due to Google~\cite{Akidau:2015} attempts to create a consolidated abstraction of such data processing, whilst allowing for flexible tuning of the system between correctness, latency and cost. The Dataflow layer manages the complicated semantics of the pipelines, delegating the actual batch and stream processing itself to external tools or ``runners''.
 
-Since the publication of the paper, Google have released a commercial Cloud implementation of the model \cite{CloudDataflow} which comprises a distributed, tuned implementation of such a runner tuned specifically for use with the Dataflow SDK. They have, however, open-sourced the Dataflow layer itself as the Apache Beam project \cite{ApacheBeam} and aim to provide the SDK in several languages. The pipelined model in question is now being called the Beam model and a reference Java SDK is ready, with a Python SDK nearing completion. As well as interfacing with the Google Cloud Dataflow runner, the Beam project includes adapters for Apache Spark and Apache Flink, as well as an implementation of a runner which can run on a local machine.
+Since the publication of the paper, Google have released a commercial Cloud implementation of the model~\cite{CloudDataflow} which comprises a distributed, tuned implementation of such a runner tuned specifically for use with the Dataflow SDK. They have, however, open-sourced the Dataflow layer itself as the Apache Beam project~\cite{ApacheBeam} and aim to provide the SDK in several languages. The pipelined model in question is now being called the Beam model and a reference Java SDK is ready, with a Python SDK nearing completion. As well as interfacing with the Google Cloud Dataflow runner, the Beam project includes adapters for Apache Spark and Apache Flink, as well as an implementation of a runner which can run on a local machine.
 
-This project aims to provide an implementation of this SDK in the Elixir programming language \cite{Elixir}, a relatively modern functional language which runs atop BEAM, the Erlang VM. Its robust macro system makes it an excellent tool for writing performant yet expressive DSLs, and it takes advantage of OTP (the Erlang runtime framework) to provide robustness and easy-to-write concurrency.
+This project aims to provide an implementation of this SDK in the Elixir programming language~\cite{Elixir}, a relatively modern functional language which runs atop BEAM, the Erlang VM. Its robust macro system makes it an excellent tool for writing performant yet expressive DSLs, and it takes advantage of OTP (the Erlang runtime framework) to provide robustness and easy-to-write concurrency.
 
 \section*{Starting point}
 
@@ -53,7 +53,7 @@ I will perform the work on my personal machine, a 2013 15" Retina MacBook Pro (1
 
 \section*{Work to be done}
 
-The main contributions of the Dataflow model are described in \cite{Akidau:2015} as follows:
+The main contributions of the Dataflow model are described in~\cite{Akidau:2015} as follows:
 
 \begin{itemize}
 	\item A \textbf{windowing model} which supports unaligned event-time windows, and a simple API for their creation and use;
@@ -87,7 +87,7 @@ As well as comparison of raw performance against the reference implementation, a
 
 \section*{Possible extensions}
 
-As well as evaluation against public data, I have secured an offer to test both my implementation and the reference one on data from the Isaac Physics \cite{Isaac} data (streaming question-answering data) as well as the firehose of device statistics from the Device Analyzer \cite{Device} project. This offer is from my project supervisor who is involved in both of these projects. These may provide a more real-world, focused example than using public data.
+As well as evaluation against public data, I have secured an offer to test both my implementation and the reference one on data from the Isaac Physics~\cite{Isaac} data (streaming question-answering data) as well as the firehose of device statistics from the Device Analyzer~\cite{Device} project. This offer is from my project supervisor who is involved in both of these projects. These may provide a more real-world, focused example than using public data.
 
 In addition to this, as mentioned in the implementation section, the project will start off with the implementation of a vertical slice of functionality, after whose completion it will be successful. If time allows however, fleshing out this slice to approach the full feature set supported by the Beam SDK will be desirable.
 

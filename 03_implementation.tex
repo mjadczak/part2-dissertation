@@ -10,8 +10,8 @@ This extended model was then implemented in Elixir.
 
 \section{The Dataflow Model extended}\label{sec:impl:dataflow}
 
-While the Dataflow paper \cite{Akidau:2015} summarised in \cref{sec:prep:dataflow} gives an overview of the Dataflow Model, it does not provide sufficient detail for its full implementation.
-This section draws on many sources, including the Beam codebase \cite{Beam-code}, issue tracker \cite{Beam-JIRA}, and mailing list \cite{Beam-mailing} in order to compile the extensions to the Model necessary for a working implementation.
+While the Dataflow paper~\cite{Akidau:2015} summarised in \cref{sec:prep:dataflow} gives an overview of the Dataflow Model, it does not provide sufficient detail for its full implementation.
+This section draws on many sources, including the Beam codebase~\cite{Beam-code}, issue tracker~\cite{Beam-JIRA}, and mailing list~\cite{Beam-mailing} in order to compile the extensions to the Model necessary for a working implementation.
 
 Many concepts in the Beam codebase are specific to the Java implementation.
 Where the author felt this was the case, a more general concept was defined.
@@ -153,7 +153,7 @@ For late elements, it must also decide whether they are late enough to be droppe
 Further, it must take into account user choices about the strategies to employ and compute the proper labelling of panes as they are output.
 Throughout this, the issue of windows merging at arbitrary times must also be considered.
 
-These issues are resolved through exhaustive case analysis and described in detail by Knowles and Shields in an Apache Beam proposal \cite{BEAM-doc-lateness}.
+These issues are resolved through exhaustive case analysis and described in detail by Knowles and Shields in an Apache Beam proposal~\cite{BEAM-doc-lateness}.
 The algorithm described therein is implemented both in Beam and in the Elixir version.
 As it is rather lengthy and dry, a high-level overview of the decisions made in its design is presented below instead.
 
@@ -187,7 +187,7 @@ The output watermark will then be the minimum of the input watermark and the ear
 When a pane is output for a particular key and window, its associated hold is cleared, allowing the watermark to advance eventually.
 
 Additional care is needed to ensure that a hold is never placed after it is meant to be cleared, stopping progress.
-An algorithm to ensure this, originating in Beam \cite{BEAM-code-WatermarkManager}, is summarised in the appendix (\cref{apx:additional:watermark-holds}).
+An algorithm to ensure this, originating in Beam~\cite{BEAM-code-WatermarkManager}, is summarised in the appendix (\cref{apx:additional:watermark-holds}).
 
 \subsection{Triggers and timers}\label{sec:impl:dataflow:triggers-timers}
 
@@ -292,13 +292,13 @@ This is provided by \emph{Sources}---application-specific code which produces a 
 At execution, the \verb|Read| Transform will use logic found in the Source to assign timestamps to elements being read (usually an intrinsic timestamp in the case of e.g.\ Kafka messages) and to publish a monotonically increasing watermark.
 Bounded sources with no intrinsic timestamps will generally output a minimal watermark (and timestamp all output with the minimal timestamp) until it is finished, advancing the watermark to the maximal timestamp to indicate that.
 
-Sources for popular data sources such as the file system, Apache Kafka, Google BigQuery and others are included in the Beam implementation, and an API \cite{BEAM-code-SourceAPI} is provided to add custom ones with arbitrary watermark logic (in fact, this API is used in \cref{sec:eval:twitter:code}).
+Sources for popular data sources such as the file system, Apache Kafka, Google BigQuery and others are included in the Beam implementation, and an API~\cite{BEAM-code-SourceAPI} is provided to add custom ones with arbitrary watermark logic (in fact, this API is used in \cref{sec:eval:twitter:code}).
 
 \subsubsection{Watermark domains}
 
 Limiting the generation of watermarks to Sources allows for the safe encapsulation of potentially lateness-introducing code.
 However, it can cause problems from a user perspective and limit the flexibility of the Model.
-Though this problem has been discussed but unaddressed in Beam \cite{Beam-JIRA-watermark-domains}, this project implements a solution.
+Though this problem has been discussed but unaddressed in Beam~\cite{Beam-JIRA-watermark-domains}, this project implements a solution.
 
 Suppose a Pipeline receives data containing names of log files in cloud storage.
 These files contain log entries collected during a particular day, which are then dumped to storage during log rotation every 24 hours.
@@ -414,9 +414,9 @@ While it would be possible to have the \exs{use Dataflow} statement redefine the
 Instead, Elixir macros enable this operator to take on a special meaning only in this particular context.
 
 The \exs{~>} operator is a macro.
-Elixir macros are powerful tools, allowing arbitrary AST transformation at compile-time \cite[p.~13]{Elixir-Metaprogramming}.
+Elixir macros are powerful tools, allowing arbitrary AST transformation at compile-time~\cite[p.~13]{Elixir-Metaprogramming}.
 Its definition (\cref{lst:impl:elixir-dpipe-macro-def}) is short and delegates to a function right after parsing the special syntax.
-This is a convention \cite[p.~7]{Elixir-Metaprogramming} which ensures that the macros do not end up causing unintuitive behaviour for the user.
+This is a convention~\cite[p.~7]{Elixir-Metaprogramming} which ensures that the macros do not end up causing unintuitive behaviour for the user.
 
 \begin{listing}[h]
 	\caption[The definition of the \exs{~>} macro for constructing Pipelines.]{The \exs{~>} macro is used to construct Pipelines. It transforms domain-specific syntax into simple function calls.}
@@ -457,7 +457,7 @@ This matching at the AST level means that \exs{--} can be redefined only within 
 The \exs{quote} macro allows for the construction of an AST node by writing normal Elixir syntax while specifying which variables from the macro's environment should be bound to the environment of the resultant AST node (the \exs{:bind_quoted} option).
 
 The \exs{use Dataflow} line in the examples imports the \exs{~>} macro implicitly (as well as setting up some module aliases).
-In fact, a \exs{use Module} statement just calls the \exs{Module.__using__} macro \cite[p.~35]{Elixir-Metaprogramming}.
+In fact, a \exs{use Module} statement just calls the \exs{Module.__using__} macro~\cite[p.~35]{Elixir-Metaprogramming}.
 This convention strikes a balance between boilerplate reduction and explicitness.
 
 The result of an application of the \exs{~>} operator is the \emph{Collection} produced by the applied Transform.
