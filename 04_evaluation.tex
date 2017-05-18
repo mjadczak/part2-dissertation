@@ -10,10 +10,10 @@ It resulted in a low-impedance translation from a conceptual Dataflow Pipeline t
 The project implementation also displayed performance superior to the single-machine Beam runner, proving able to deal with busy streams of data and large Pipelines while displaying excellent latency characteristics and a predictable, linear performance response to load (\cref{sec:eval:latency}).
 The Beam runner was not able to handle the stream of data even with very simple Pipelines.
 
-The final project weighed in at approximately 3,200 lines of Elixir code (excluding comments, blank lines and tests).
-Approximately 12,000 lines of code were written over the lifetime of the project, illustrating the volatility of the codebase due to evolving requirements.
+The final project weighed in at approximately \num{3200} lines of Elixir code (excluding comments, blank lines and tests).
+Approximately \num{12000} lines of code were written over the lifetime of the project, illustrating the volatility of the codebase due to evolving requirements.
 
-In comparison, the core Beam codebase comprises $\sim$78,000 lines of code, though it implements some functionality which is out-of-scope for the Elixir implementation.
+In comparison, the core Beam codebase comprises $\sim$\num{78000} lines of code, though it implements some functionality which is out-of-scope for the Elixir implementation.
 
 \section{Feature analysis}\label{sec:eval:limitations}
 
@@ -81,7 +81,7 @@ In spite of this, the performance of the implementation was excellent, as the re
 
 Efforts were made to collect data in similar environments in order to reduce the potential for uncontrolled variation.
 
-All tests were conducted on a MacBook Pro (15-inch, Late 2016) with a 2.9GHz Intel Core i7 CPU and 16GB of 2133 MHz RAM running macOS 10.12.4.
+All tests were conducted on a MacBook Pro (15-inch, Late 2016) with a \SI{2.9}{\giga\hertz} Intel Core~i7 CPU and \SI{16}{GB} of \SI{2133}{\mega\hertz} RAM running macOS 10.12.4.
 Runtimes used were Elixir 1.4.2 on OTP 19 and the Oracle JRE v1.8.0\_66-b17.
 
 Prior to conducting the tests, all non-essential background processes and applications were terminated.
@@ -166,7 +166,8 @@ terms = [...]
 #...
 p
 ~> "Read Stream" -- IO.read_stream(fn -> ExTwitter.stream_filter(track: terms, language: "en") end)
-~> "Extract Timestamps" -- Windowing.with_timestamps(&parse_as_timestamp.(&1.created_at), delay_watermark: {30, :seconds, :event_time})
+~> "Extract Timestamps" -- Windowing.with_timestamps(&parse_as_timestamp.(&1.created_at),
+     delay_watermark: {30, :seconds, :event_time})
 # `&parse_as_timestamp.(&1.created_at)` is captured lambda syntax for
 # fn tweet -> parse_as_timestamp.(tweet.created_at) end
 	\end{minted}
@@ -224,7 +225,7 @@ Notable is the ease with which we can timestamp elements based on their data, an
 This showcases the watermark domains feature (\cref{sec:impl:dataflow:watermark-generation}) not present in the Java implementation.
 It is possible to decouple the reading of the stream and the timestamp extraction and watermark generation into separate Transforms, resulting in cleaner, more reusable code.
 
-To achieve the same result in Java, we need almost 200 lines of code, as \cref{lst:eval:twitter-readstream-java} summarises.
+To achieve the same result in Java (\cref{lst:eval:twitter-readstream-java}), almost 200 lines of code are needed.
 Firstly, since there is no standard way of representing streaming sequences in Java, custom sources of data will need to implement their own asynchronous logic.
 \texttt{Twitter4J}, a popular Twitter client library for Java, requires the user to provide a callback object implementing a particular interface to be notified of new tweets.
 
@@ -311,46 +312,80 @@ Java's paradigm is orthogonal to the way computation is reasoned about in the Mo
 
 \section{Latency evaluation}\label{sec:eval:latency}
 
-A key performance indicator of stream-processing systems is their latency when processing streams of data element-wise.
-While much of the power of the Model comes from its grouping and windowing facilities, its goal is to subsume many other models of computation, pure stream processing being one of those.
+A key performance indicator of stream-processing systems is the latency of a single element from input to output when the system is under load.
+Notwithstanding the Model's powerful windowing features, implementations must display robust streaming performance if they are to subsume existing systems.
 
 \subsection{Methodology}
 
-In this experiment, a Pipeline was created in which integer elements were generated uniformly at a rate of 100 per second and passed through a series of \verb|Map| Transforms, each of which incremented the value.
-The latency of each element was measured from the moment of its generation to its output at the last identity Transform.
-The length of the Pipeline was varied and the effects of each on element latency analysed.
+In this experiment, a Pipeline was created in which integer elements were generated uniformly at a rate of \SI{100}{\per\second} and passed through a series of \verb|Map| Transforms, each of which incremented the value.
+The latency of each element was measured from the moment of its generation to its output at the last Transform.
+The length of the Pipeline was varied and the effects on element latency analysed.
 CPU and memory usage were also captured at half-second increments.
 
-The experiment was performed with 14 different values for the Pipeline length, ranging from 1 to 2000.
-It is to be noted that at length of above approximately 3000 Transforms, the Java implementation fails with a stack overflow, while the Elixir implementation is able to sustain over 10000 Transforms in the Pipeline with the same linear growth.
+The experiment compared the performance of the Elixir implementation with the Apache Flink runner, an optimised, production-ready runner for Beam.
+The Beam DirectRunner, the default for local Pipelines, was also tested but could not achieve the throughput necessary for its data to be comparable.
 
-Each instance of the experiment was repeated X times, each time running for X seconds.
-The data from each repetition was aggregated together and a mean and standard deviation calculated.
+Streaming Pipelines tend to be long-running. As such, the first \SI{10}{\second} of data was discarded, as the Java runners showed a large spike in resource usage and element latency while the Pipeline was initialising.
+The Elixir runner displayed a similar spike, which was usually shorter than \SI{1}{\second}.
+
+Each instance of the experiment was repeated \num8 times, each time running for \SI{180}{\second}.
+
+\subsection{Runner choice}
+
+The initial experimental design evaluated Pipeline lengths of up to \num{10000} Transforms, comparing the project implementation to the Beam DirectRunner.
+However, the DirectRunner ran out of stack space when trying to construct Pipelines longer than $\sim$\num{2000} Transforms.
+Given that such huge Pipelines are likely uncommon, the length range was modified to \num{10}--\num{2000} Transforms.
+
+After analysis of the data was carried out, it emerged that the DirectRunner could not in fact handle a \SI{100}{\per\second} stream of elements---the limiting factor was throughput, not latency.
+\Cref{fig:eval:latency-graph-java} illustrates the situation.
+The element latency consistently grew with time as the test ran.
+This indicates that the runner was falling behind the stream and could not process it in real-time.
+This occurred with CPU usage consistently at \pmark\SI{100}{\percent} (even though \num8 hyperthreads were available) and memory usage at \pmark\SI{1.2}{GB} (even though the heap size was \SI{4}{GB}).
+This indicated that the bottleneck was due to the single-threaded design of the runner.
+Indeed, it could not even handle a full stream of elements at a rate of \SI{10}{\per\second}.
+
+In order to obtain data suitable for a meaningful comparison, the experiment was re-run using the Apache Flink \cite{ApacheFlinkRunner} runner.
+The Apache Flink project has focused on implementing the Beam Model and is the production-ready open-source runner most suitable and optimised for execution of Beam Pipelines \cite{ApacheFlinkFocus}.
+While it supports cluster execution, it was run locally to obtain comparable data.
+However, even with the stack size increased to \SI{256}{MB}, it could not construct Pipelines longer than \pmark\num{500} Transforms, and so the range of Pipeline lengths evaluated was reduced.
+
+\begin{figure}
+    \centering
+	\subfloat[][\textbf{DirectRunner: Element latencies with time at different Pipeline lengths}\\ $N$ is the number of Transforms. Multiple executions are shown per plot. The rate of latency growth increases with the Pipeline length.]{
+		\includegraphics[height=0.42\textheight]{images/graphs/java_latency_demo}
+	}
+	
+	\subfloat[][\textbf{DirectRunner: CPU and memory usage at different Pipeline lengths}\\The CPU and memory usage remained stable at lengths above \num{100} Transforms. The system did not consume all available resources (\SI{800}{\percent} CPU and \SI{4}{GB} memory).]{
+		\includegraphics[height=0.42\textheight]{images/graphs/java_memcpu_double}
+	}
+	\caption[Results of the latency experiment executed on the DirectRunner, showing its unsuitability.]{The DirectRunner could not maintain sufficient throughput to evaluate the latency of the system under load in a valid way. Data indicate that this is due to the single-threaded design of the runner, not optimised for performance.}
+	\label{fig:eval:latency-graph-java}
+\end{figure}
 
 \subsection{Results}
 
 \begin{figure}
     \centering
-	\subfloat[][As the number of transforms grows, the mean latency increases roughly linearly. (Discuss std dev. \%STDev grows linearly with no transforms.)]{
-		\includegraphics[height=0.45\textheight]{images/graphs/elixir_latency}
+	\subfloat[Element latency vs.\ Pipeline length.][\textbf{Elixir: Element latency vs.\ Pipeline length} \\An average of \num{128000} elements per box were measured. Each box shows the median and interquartile range. The whisker length is $1.5\times$ the IQR. Extreme outliers above \SI{12}{\milli\second} are omitted.]{
+		\includegraphics[height=0.42\textheight]{images/graphs/elixir_latency_box}
 	}
 	
-	\subfloat[][]{
-		\includegraphics[height=0.45\textheight]{images/graphs/elixir_memcpu}
+	\subfloat[Average CPU and memory consumption vs.\ Pipeline length.][\textbf{Elixir: Average CPU and memory consumption vs.\ Pipeline length.} \\ Both resources are consumed with linear growth as the Pipeline length increases, as demonstrated by the good fit of a linear model.]{
+		\includegraphics[height=0.42\textheight]{images/graphs/elixir_memcpu_linear}
 	}
-	\caption[Results of the latency experiment run on the Elixir implementation.]{The Elixir implementation shows predictable, linear resource consumption under load.}
+	\caption[Results of the latency experiment run executed on the Elixir runner.]{The Elixir runner exhibits good scalability under load. When processing elements at a rate of \SI{100}{\per\second}, even very long Pipelines maintain low latency and jitter while maintaining full throughput. Resource consumption scales linearly and predictably with Pipeline length.}
 	\label{fig:eval:latency-graph-elixir}
 \end{figure}
 
 \begin{figure}
     \centering
-	\subfloat[][]{
-		\includegraphics[height=0.45\textheight]{images/graphs/java_latency}
+	\subfloat[][\textbf{Flink: Element latency vs.\ Pipeline length} \\An average of \num{138000} elements per box were measured. Each box shows the median and interquartile range. The whisker length is $1.5\times$ the IQR. Extreme outliers above \SI{80}{\milli\second} are omitted.]{
+		\includegraphics[height=0.42\textheight]{images/graphs/java_flink_latency_box}
 	}
 	
-	\subfloat[][]{
-		\includegraphics[height=0.45\textheight]{images/graphs/java_memcpu}
+	\subfloat[][\textbf{Flink: Average CPU and memory consumption vs.\ Pipeline length.} \\ Both resources are consumed with linear growth as the Pipeline length increases, as demonstrated by the good fit of a linear model.]{
+		\includegraphics[height=0.42\textheight]{images/graphs/java_flink_memcpu_linear}
 	}
-	\caption[Results of the latency experiment run on the Java implementation.]{The Java implementation shows good behaviour at sub-200 Transform levels, before degrading to very poor levels of latency.}
-	\label{fig:eval:latency-graph-java}
+	\caption[Results of the latency experiment run executed on the Flink runner.]{The Flink runner handled the element stream at full throughput even for longer Pipelines. It exhibits no effect of Pipeline length on element latency in the range tested. Resource consumption scales linearly, but memory usage growth is quite steep.}
+	\label{fig:eval:latency-graph-flink}
 \end{figure}
