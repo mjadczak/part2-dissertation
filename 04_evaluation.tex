@@ -334,13 +334,13 @@ Each instance of the experiment was repeated \num8 times, each time running for 
 
 The initial experimental design evaluated Pipeline lengths of up to \num{10000} Transforms, comparing the project implementation to the Beam DirectRunner.
 However, the DirectRunner ran out of stack space when trying to construct Pipelines longer than $\sim$\num{2000} Transforms.
-Given that such huge Pipelines are likely uncommon, the length range was modified to \num{10}--\num{2000} Transforms.
+Given that such large Pipelines are uncommon in practice, the length range was modified to \num{10}--\num{2000} Transforms.
 
 After analysis of the data was carried out, it emerged that the DirectRunner could not in fact handle a \SI{100}{\per\second} stream of elements---the limiting factor was throughput, not latency.
 \Cref{fig:eval:latency-graph-java} illustrates the situation.
 The element latency consistently grew with time as the test ran.
 This indicates that the runner was falling behind the stream and could not process it in real-time.
-This occurred with CPU usage consistently at \pmark\SI{100}{\percent} (even though \num8 hyperthreads were available) and memory usage at \pmark\SI{1.2}{GB} (even though the heap size was \SI{4}{GB}).
+This occurred with CPU usage consistently close to \SI{100}{\percent} (even though \num8 hyperthreads were available) and memory usage at \pmark\SI{1.2}{GiB} (even though the heap size was \SI{4}{GB}).
 This indicated that the bottleneck was due to the single-threaded design of the runner.
 Indeed, it could not even handle a full stream of elements at a rate of \SI{10}{\per\second}.
 
@@ -364,14 +364,49 @@ However, even with the stack size increased to \SI{256}{MB}, it could not constr
 
 \subsection{Results}
 
+\subsubsection{Latency}
+
+The Elixir runner displayed excellent performance, processing nearly all elements in less than \SI{10}{\milli\second} with a median of \SI8{\milli\second}, even at \num{2000} Transforms (\cref{fig:eval:latency-graph-elixir}\subref{fig:eval:latency-graph-elixir:latency}).
+
+Both median latency and the inter-quartile range (IQR) increased with Pipeline length, indicating that in longer Pipelines elements experienced increased jitter.
+This behaviour is likely due to the randomised scheduling of Transform processes by the BEAM.
+The median latency and IQR both remained very low (cf. Flink) throughout the range of Pipeline lengths tested, suggesting excellent scalability across that dimension.
+
+The Flink runner exhibited consistent---if unimpressive---latency results across the experimental range (which was smaller than that for Elixir) (\cref{fig:eval:latency-graph-flink}\subref{fig:eval:latency-graph-flink:latency}).
+At all Pipeline lengths, the median latency was \SI{27}{\milli\second} with an IQR of \SI{13}{\milli\second}.
+This shows that the runner is able to handle the element stream in this Pipeline length range, but points to another limiting factor.
+
+\subsubsection{Resource consumption}
+
+The Elixir runner displayed CPU usage and memory consumption which scaled linearly with Pipeline length, up to \SI{80}{\percent} and \SI{120}{MiB} at \num{2000} Transforms (\cref{fig:eval:latency-graph-elixir}\subref{fig:eval:latency-graph-elixir:cpumem}).
+There is no indication that either of these resources were a limiting factor.
+Instead, it is likely that the runner is prevented from achieving lower latencies by the overhead of switching and I/O between individual processes (Transforms).
+
+The Flink runner also showed a linear trend in its resource consumption (\cref{fig:eval:latency-graph-flink}\subref{fig:eval:latency-graph-flink:cpumem}).
+While its CPU usage was lower in the range tested (by a factor of \num{4}--\num{10}$\times$), its memory usage was significantly higher (by up to \num{60}$\times$) and growing fast with Pipeline length.
+This pattern, when viewed against the consistent latency response in \cref{fig:eval:latency-graph-flink}\subref{fig:eval:latency-graph-flink:latency}, paints a picture of a system limited by memory operations.
+The CPU usage is low because progress is often held back by memory operations.
+This scenario is common in JVM applications.
+
+\subsubsection{Conclusions}
+
+The Elixir runner outperforms Flink with respect to latency across the experimental range, displaying \num{10}--\num{300}$\times$~lower median latency with significantly lower IQR.
+It is able to maintain its excellent scalability at Pipeline lengths at which the Flink runner fails to initialise, in spite of not being designed with performance in mind.
+This illustrates the power of the BEAM VM to execute extremely concurrent systems in a performant manner while maintaining low resource overheads.
+
+The resource consumption of both runners scales linearly with Pipeline length, though Flink consumes as much as \num{60}$\times$~more memory in spite of lower CPU usage.
+In practice, this pattern of memory consumption proves to be a limiting factor much before the CPU usage of Elixir does.
+
 \begin{figure}
     \centering
-	\subfloat[Element latency vs.\ Pipeline length.][\textbf{Elixir: Element latency vs.\ Pipeline length} \\An average of \num{128000} elements per box were measured. Each box shows the median and interquartile range. The whisker length is $1.5\times$ the IQR. Extreme outliers above \SI{12}{\milli\second} are omitted.]{
+	\subfloat[Element latency vs.\ Pipeline length.][\textbf{Elixir: Element latency vs.\ Pipeline length} \\An average of \num{128000} elements per box were measured. Each box shows the median and interquartile range. The outlier threshold is $1.5\times$ the IQR. Extreme outliers above \SI{12}{\milli\second} are omitted.]{
 		\includegraphics[height=0.42\textheight]{images/graphs/elixir_latency_box}
+		\label{fig:eval:latency-graph-elixir:latency}
 	}
 	
 	\subfloat[Average CPU and memory consumption vs.\ Pipeline length.][\textbf{Elixir: Average CPU and memory consumption vs.\ Pipeline length.} \\ Both resources are consumed with linear growth as the Pipeline length increases, as demonstrated by the good fit of a linear model.]{
 		\includegraphics[height=0.42\textheight]{images/graphs/elixir_memcpu_linear}
+		\label{fig:eval:latency-graph-elixir:cpumem}
 	}
 	\caption[Results of the latency experiment run executed on the Elixir runner.]{The Elixir runner exhibits good scalability under load. When processing elements at a rate of \SI{100}{\per\second}, even very long Pipelines maintain low latency and jitter while maintaining full throughput. Resource consumption scales linearly and predictably with Pipeline length.}
 	\label{fig:eval:latency-graph-elixir}
@@ -379,13 +414,15 @@ However, even with the stack size increased to \SI{256}{MB}, it could not constr
 
 \begin{figure}
     \centering
-	\subfloat[][\textbf{Flink: Element latency vs.\ Pipeline length} \\An average of \num{138000} elements per box were measured. Each box shows the median and interquartile range. The whisker length is $1.5\times$ the IQR. Extreme outliers above \SI{80}{\milli\second} are omitted.]{
+	\subfloat[][\textbf{Flink: Element latency vs.\ Pipeline length} \\An average of \num{138000} elements per box were measured. Each box shows the median and interquartile range. The outlier threshold is $1.5\times$ the IQR. Extreme outliers above \SI{80}{\milli\second} are omitted.]{
 		\includegraphics[height=0.42\textheight]{images/graphs/java_flink_latency_box}
+		\label{fig:eval:latency-graph-flink:latency}
 	}
 	
 	\subfloat[][\textbf{Flink: Average CPU and memory consumption vs.\ Pipeline length.} \\ Both resources are consumed with linear growth as the Pipeline length increases, as demonstrated by the good fit of a linear model.]{
 		\includegraphics[height=0.42\textheight]{images/graphs/java_flink_memcpu_linear}
+		\label{fig:eval:latency-graph-flink:cpumem}
 	}
-	\caption[Results of the latency experiment run executed on the Flink runner.]{The Flink runner handled the element stream at full throughput even for longer Pipelines. It exhibits no effect of Pipeline length on element latency in the range tested. Resource consumption scales linearly, but memory usage growth is quite steep.}
+	\caption[Results of the latency experiment run executed on the Flink runner.]{The Flink runner handles the element stream at full throughput even for longer Pipelines. There is no apparent effect of Pipeline length on element latency in the range tested. Resource consumption scales linearly, but memory usage growth is quite steep even though CPU usage remains low.}
 	\label{fig:eval:latency-graph-flink}
 \end{figure}
