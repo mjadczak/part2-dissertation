@@ -7,8 +7,8 @@ A large subset of Beam features were implemented (\cref{sec:eval:limitations}).
 The programmer interface which was developed followed patterns native to Elixir.
 It resulted in a low-impedance translation from a conceptual Dataflow Pipeline to its representation in code, achieving a dramatic reduction in code size over a Java version (\cref{sec:eval:twitter:code}).
 
-The project implementation also displayed performance superior to the single-machine Beam runner, proving able to deal with busy streams of data and large Pipelines while displaying excellent latency characteristics and a predictable, linear performance response to load (\cref{sec:eval:latency}).
-The Beam runner was not able to handle the stream of data even with very simple Pipelines.
+The project implementation also displayed performance superior to the optimised Apache Flink Beam runner, proving able to deal with busy streams of data and large Pipelines while displaying excellent latency characteristics and a predictable, linear performance response to load (\cref{sec:eval:latency}).
+The default Beam runner was not able to handle the stream of data even with very simple Pipelines.
 
 The final project weighed in at approximately \num{3200} lines of Elixir code (excluding comments, blank lines and tests).
 Approximately \num{12000} lines of code were written over the lifetime of the project, illustrating the volatility of the codebase due to evolving requirements.
@@ -89,16 +89,15 @@ Tests were initiated using a scripted test runner in order to replicate multiple
 
 \subsection{Data collection and processing methodologies}\label{sec:eval:approach:collection}
 
-A custom test runner was developed in Elixir for the purpose of scheduling and running tests.
+A custom test runner was developed in Elixir for the purpose of scheduling and running experiments.
 It could be configured with tests for both the Java and Elixir implementations.
 Each test was executed via a new system process with configuration passed as command-line arguments.
 A new VM instance was spawned each time for both Elixir and Java tests to maintain consistency and accuracy.
 
-The test runner measured the CPU and memory usage of the spawned process using the \verb|ps| program.
+The test runner measured the CPU and memory usage of the spawned process using the \verb|ps| utility.
 Other measurements, such as latency, were recorded directly by the instrumented binary.
 
 The data were then processed, analysed and plotted using MATLAB.
-Sources for both the test runner and the MATLAB scripts used can be found in \cref{apx:twitter-code}.
 
 \section{The Twitter example}\label{sec:eval:approach:twitter}
 
@@ -113,14 +112,14 @@ This real-world scenario formed the basis of this evaluation exercise.
 Twitter's free streaming API~\cite{TwitterStreamingAPI} was used to receive a stream of English-language tweets on particular topics.
 Thirteen terms pertaining to technology (such as `tech' and `Google') were selected and passed to the API to constrain the results.
 
-\todo{rework below}
+It is beneficial to have autocompletion data which is as up-to-date as possible, but equally, it is good to take into account older data.
+Therefore, the tweets were windowed into sliding windows with size \SI{3}{\min} and period \SI{1}{\min}.
+This meant that an up-to-date autocompletion list was emitted every \SI{1}{\min}.
+Each of these was derived from tweets received in the preceding \SI{3}{\min}.
 
-The tweets were windowed using sliding windows and then processed further.
-Hashtags present were counted per-window.
-They were then expanded into all possible prefixes, retaining counts.
-Finally, a list of the top three hashtag suggestions for each prefix was produced.
-This data could be fed into an autocompletion API, but for the purposes of this exercise was simply logged.
-\Cref{fig:eval:twitter-pipeline-dag} illustrates the resultant Pipeline.
+\Cref{fig:eval:twitter-pipeline-dag} illustrates the Pipeline used to process the tweets.
+In a real web application, the results would be sent to another process or published to e.g.\ Redis, in order to update the state of code handling user requests for autocompletion suggestions.
+For the purposes of this experiment they were just logged to the console.
 
 \begin{figure}
 	\centering
@@ -134,23 +133,27 @@ The scenario provides a good way to test various features of the Model.
 Sliding windowing is used, and multiple stages of aggregation per window is employed.
 The Pipeline utilises both Elementwise and Grouping Transforms.
 
-The free stream provided by Twitter delivers only around 50--80 tweets/second.
-Therefore, to exercise the systems and compare their performance under load, both Pipelines included a configurable step which duplicated the tweets by a multiplicative factor, simulating a higher-volume stream.
+The free stream provided by Twitter delivers \num{50}--\num{80} tweets per second, up to \SI{1}{\percent} of the full firehose.
+To simulate a larger stream and evaluate the throughput of the implementation, a configurable way to duplicate each tweet by a multiplicative factor was added to the experiment.
 
-The key success criterion in this example is not necessarily throughput or latency, due to the bounded amount of input and output per window.
-Rather, success is defined as the ability to deliver results on time for each window.
+The success criterion in this example is not necessarily speed or latency, due to the bounded amount of input and output per window.
+Rather, success is defined as the ability to keep up with the stream and be able to output a batch of data derived from the preceding \SI{3}{\min} every \SI{1}{\min} on time.
+
+The next section explores the programmer-facing differences when implementing this example in Elixir and Java.
+\Cref{sec:eval:twitter:throughput} evaluates the throughput abilities of the Elixir runner.
+The Beam DirectRunner was not evaluated as it could not keep up with the stream even without expansion.
+Its limits are discussed in \cref{sec:eval:latency}.
 
 \subsection{Code comparison}\label{sec:eval:twitter:code}
 
-The Pipeline was created in both the Java and Elixir implementations of the Model.
-The full code is available in \cref{apx:twitter-code}; what follows is a comparison of selected excerpts which illustrate the differences in the two coding styles.
+The Pipeline was implemented in both Java (Beam) and Elixir.
+The full code is available in \cref{apx:twitter-code}; what follows is a comparison of selected excerpts which illustrate differences between the two.
 
-The Java example is noticeably longer, using XX lines of code (excluding blank lines and comments).
-In contrast, the Elixir implementation takes only XX lines of code to write.
+The Java code is noticeably longer, requiring 220 lines of code (excluding blank lines and comments) compared to the 35 lines required in Elixir.
 
 \subsubsection{Reading tweets}
 
-One of the primary reasons for the length of the Java version is the required method of injecting the stream of tweets into the Pipeline.
+One of the primary reasons for the length of the Java version is the necessary method of consuming the stream of tweets.
 
 \begin{codelisting}
 	\caption{Reading a Twitter stream as an unbounded source in Elixir.}
@@ -214,43 +217,38 @@ p.apply("GetTweets", Read.from(TwitterSource.withTerms(terms)))
 \end{codelisting}
 
 The Elixir standard library provides a way to deal with potentially unbounded, lazy data---\exs{Stream}s.
-As such, it makes sense that one of the Root Transforms provided out of the box in Elixir Dataflow is \exs{IO.read_stream}.
-We need only pass a lambda which creates the desired stream on-demand, and its elements will automatically be emitted.
+As such, it makes sense that one of the Root Transforms implemented in Elixir Dataflow is \exs{IO.read_stream}.
 
 \Cref{lst:eval:twitter-readstream-elixir} illustrates this well.
-\exs{ExTwitter} is a Twiter client for Elixir, and indeed it uses the standard \exs{Stream} module to provide its functionality.
+\exs{ExTwitter} \cite{ExTwitter} is a Twiter client for Elixir, and it returns a standard \exs{Stream} when used to query the Twitter API.
 
-Notable is the ease with which we can timestamp elements based on their data, and assign them a watermark with a simple, standard Transform.
-\exs{Windowing.with_timestamps} is a Composite Transform, so it is easy to insert a smarter watermark heuristic if needed; the one used takes the highest timestamp seen so far and outputs a watermark 30 seconds before this---an element can be up to 30 seconds `out of order' before it is considered late.
-This showcases the watermark domains feature (\cref{sec:impl:dataflow:watermark-generation}) not present in the Java implementation.
-It is possible to decouple the reading of the stream and the timestamp extraction and watermark generation into separate Transforms, resulting in cleaner, more reusable code.
+In Elixir, the \exs{Windowing.with_timestamps} Transform provides a way to assign data-based timestamps to elements and generate a watermark based on a heuristic.
+The emission of a watermark at this stage is only possible because of the watermark domains feature (\cref{sec:impl:dataflow:watermark-generation}).
+In this case, the output watermark is \SI{30}{\second} before the highest timestamp seen so far.
+This means a tweet in the stream can be up to \SI{30}{\second} `out of order' before it causes lateness in the Pipeline.
+This is important as the stream is not guaranteed to be ordered.
 
-To achieve the same result in Java (\cref{lst:eval:twitter-readstream-java}), almost 200 lines of code are needed.
-Firstly, since there is no standard way of representing streaming sequences in Java, custom sources of data will need to implement their own asynchronous logic.
-\texttt{Twitter4J}, a popular Twitter client library for Java, requires the user to provide a callback object implementing a particular interface to be notified of new tweets.
+In Java, almost 200 lines of code are needed to read, timestamp and watermark the tweets (\cref{lst:eval:twitter-readstream-java}).
+The lack of a community standard for streams means that each data source needs to manage its own asynchronous logic.
+For instance, \texttt{Twitter4J} \cite{Twitter4J} (the Twitter library used) requires the registration of a subscriber with callback methods.
 
-In order to `connect' the Twitter stream to the Pipeline, an \texttt{UnboundedSource} had to be written.
-This is a large interface requiring the implementation of several functions.
-Some of these apply to the advanced distributed features offered by Beam such as checkpointing and coding\footnote{
-Used to dump data from memory into storage. In Elixir, no extra coding logic is needed since any term can be serialised in a standard way.
-} and are omitted.
-Others, however, show the incidental complexity present in the Java API.
-On top of this, care must be taken to ensure the class is thread-safe.
+In order to `connect' the Twitter stream to the Pipeline, an \texttt{UnboundedSource} (part of the Source API) had to be written.
+The code listing shows the incidental complexity inherent in Java code, requiring implementation of massive interfaces even when only simple functionality is required.
 
-Since Beam assumes that the entire Pipeline is in the same watermark domain, the Source itself must manage its own timestamping and watermark generation.
-In this case, the class must contain logic not only to read, buffer and emit tweets from the network, but also to extract their timestamp and to generate the delayed watermark based on the data.
-This results in long, tightly-coupled and complex code.
+The Source must manage its own timestamping and watermark generation and cannot use a standard Transform as in Elixir.
+This leads to the tight coupling of the logic which reads, buffers and emits tweets obtained from the network with timestamp generation and watermarking logic.
+Due to Java's concurrency model, thread-safety code needs to be included as well.
 
-Clearly, the conventions around \exs{Stream}s in Elixir coupled with the decoupling of reading and processing logic due to the inclusion of watermark domains combine to demonstrate that the Elixir solution is superior.
+It is clear that Elixir's conventions around \exs{Stream}s and decoupled, modular design make it the superior solution in this case.
 
 \subsubsection{Lambdas vs.\ classes}
 
-The Dataflow Model adopts an inherently functional model of computation based on functions transforming data, often using standard patterns of mapping and filtering.
+The Dataflow Model adopts an intrinsically functional model of computation based on data transformations.
 Java's support for this model is poor.
-This is exemplified best by the common need to specify logic in small internal classes as in \cref{lst:eval:twitter-lambdas-java}.
+This is exemplified best by the need to specify logic in small internal classes as in \cref{lst:eval:twitter-lambdas-java}.
 
 \begin{codelisting}
-	\caption[Using internal classes to specify transformation logic in Java.]{In Java, there is often a need to use internal classes to specify logic. While Java~8 lambdas can be used, the lack of  type inference means that internal classes are often a cleaner solution.}
+	\caption[Using internal classes to specify transformation logic in Java.]{In Java, there is often a need to use internal classes to specify logic. While Java~8 lambdas can be used, the lack of type inference means that internal classes are often a cleaner solution.}
 	\label{lst:eval:twitter-lambdas-java}
 	\begin{minted}[breaklines=true]{java}
  public static class GeneratePrefixesFn
@@ -282,7 +280,7 @@ extends SimpleFunction<KV<String, List<KV<String, Long>>>, KV<String, List<Strin
 \end{codelisting}
 
 \begin{codelisting}
-	\caption[Using lambdas to specify transformation logic in Elixir.]{In Elixir, we take advantage of the inherent functional paradigm of the language to specify transformation logic in a familiar way.}
+	\caption[Using lambdas to specify transformation logic in Elixir.]{In Elixir, the inherent functional paradigm of the language enables the specification of transformation logic in a familiar manner.}
 	\label{lst:eval:twitter-lambdas-elixir}
 	\begin{minted}[breaklines=true]{elixir}
 ~> "Generate Prefixes" -- Core.flat_map(fn {tag, count} ->
@@ -298,17 +296,59 @@ extends SimpleFunction<KV<String, List<KV<String, Long>>>, KV<String, List<Strin
 	\end{minted}
 \end{codelisting}
 
-\Cref{lst:eval:twitter-lambdas-elixir} shows that Elixir, as a functional language, excels at expressing these kinds of computation natively.
+\Cref{lst:eval:twitter-lambdas-elixir} shows that Elixir, a functional language, excels at expressing these kinds of computation natively.
 
 \subsubsection{Summary}
 
-Though formal user studies were not performed to assess the `friendliness' or ease of use of the two SDKs empirically, the preceding examples show that Elixir as a language is much better suited to express the concepts of the Dataflow Model in code.
-Java's paradigm is orthogonal to the way computation is reasoned about in the Model, and even though a `fluent API' can be used to make things as friendly as possible, the static typing coupled with no type inference fundamentally limits the expressivity of the language in uses like this one.
+Though formal user studies were not performed to assess the ease of use of the two SDKs empirically, the preceding examples show that Elixir as a language is much better suited to express the concepts of the Dataflow Model in code.
 
+Java's paradigm is orthogonal to the way computation is reasoned about in the Model.
+Even when a fluent API and Java~8 lambdas are employed, the lack of type inference buries the meaning of the code behind countless type annotations.
 
-\subsection{Performance evaluation}\label{sec:eval:performance}
+\subsection{Throughput evaluation}\label{sec:eval:twitter:throughput}
 
-\subsection{Resource consumption}\label{sec:eval:resource}
+The Elixir implementation was executed with values for the multiplicative factor varying from \num1 to \num{10000} in order to determine its maximal throughput.
+Each experiment was run for \SI{9}{\min}, allowing for \num9 discrete panes of output, spanning \num3 disjoint time intervals.
+
+The Pipeline was instrumented to log the watermark at three points, as \cref{fig:eval:twitter:pipeline-instrument} illustrates.
+Additionally, CPU and memory usage were collected twice per second.
+
+The goal of the experiment was to find the multiplicative factor $F$ at which the Pipeline could no longer keep up with the stream and produce a pane of output every minute.
+It was found that a factor of \num{750}, translating to approximately \num{37500} tweets per second, caused the Pipeline to fall behind.
+
+\Cref{fig:eval:twitter:throughput}\subref{fig:eval:twitter:throughput:500} shows the execution with $F = 500$.
+The Pipeline is keeping up with the stream---the Event and Count watermarks stay almost exactly \SI{30}{\second} behind the true watermark (as per the heuristic used).
+The Output watermark indicates that a pane is output every minute---when this happens, a watermark hold is released and the Output watermark can advance to the next window being buffered.
+The CPU trace shows that mostly two hyperthreads are busy processing data with periods of idleness.
+On pane output, a third hyperthread does work as indicated by the spikes towards \SI{300}{\percent} CPU usage.
+
+On the other hand, in \cref{fig:eval:twitter:throughput}\subref{fig:eval:twitter:throughput:750} the Pipeline can be clearly seen falling behind with $F = 750$.
+The clearest indication of this is the Output watermark---a pane is output every \SI{1.3}{\min}, meaning that each pane becomes more and more out of date with respect to the live data.
+It is also evident that the Event watermark is diverging from Ideal watermark, and the Count watermark is diverging from the Event watermark.
+This indicates that both of these Elementwise sections of the Pipeline cannot process elements as fast as they are produced.
+
+The CPU trace offers a hint as to the cause of this---the CPU usage is almost constantly \SI{200}{\percent}, with no idle time.
+This means that two hyperthreads are executing as fast as possible, even though there is unused power.
+A common optimisation in some other Beam runners is to automatically parallelise Elementwise Transforms in order to increase throughput in cases like these.
+This example demonstrates the situation in which the optimisation would likely boost possible throughput by several times.
+
+The Pipeline can sustain a processing speed of over \num{25000} tweets per second.
+Keeping in mind that each hashtag in each tweet is exploded into all of its possible prefixes, this is very impressive performance in a real-world scenario, with a host of optimisations yet to be implemented.
+
+\begin{figure}
+	\centering
+	\subfloat[][\textbf{Elixir: Twitter Pipeline execution at \pmark\num{25000} tweets per second}\\The Event and Count watermarks remain steady at \SI{30}{\second} behind the Ideal WM. The Output WM indicates that a pane of output is delivered every minute, as required. The CPU trace shows that there are periods where the CPU is idle.]{
+		\makebox[\textwidth]{\includegraphics[height=0.42\textheight]{images/graphs/twitter_wm_500}}
+		\label{fig:eval:twitter:throughput:500}
+	}\\
+	\subfloat[][\textbf{Elixir: Twitter Pipeline execution at \pmark\num{37500} tweets per second}\\The Event WM steadily falls behind the Ideal WM, and the Count WM falls behind even further. The Output WM shows output is no longer delivered every minute. The CPU trace shows the code is exhausting two hyperthreads, not able to parallelise further.]{
+		\makebox[\textwidth]{\includegraphics[height=0.42\textheight]{images/graphs/twitter_wm_750}}
+		\label{fig:eval:twitter:throughput:750}
+	}
+	\caption[Watermark and CPU traces of the Elixir runner executing the Twitter Pipeline at two different values of the multiplicative factor.]{The Elixir runner can keep the Twitter Pipeline on time when the multiplicative factor $F$ is \num{500}, but falls behind when it is \num{750}. The CPU usage trace indicates that the bottleneck is single-thread performance in Elementwise Transforms.}
+	\label{fig:eval:twitter:throughput}
+\end{figure}
+
 
 \section{Latency evaluation}\label{sec:eval:latency}
 
@@ -352,11 +392,11 @@ However, even with the stack size increased to \SI{256}{MB}, it could not constr
 \begin{figure}
     \centering
 	\subfloat[][\textbf{DirectRunner: Element latencies with time at different Pipeline lengths}\\ $N$ is the number of Transforms. Multiple executions are shown per plot. The rate of latency growth increases with the Pipeline length.]{
-		\includegraphics[height=0.42\textheight]{images/graphs/java_latency_demo}
+		\makebox[\textwidth]{\includegraphics[height=0.42\textheight]{images/graphs/java_latency_demo}}
 	}
 	
 	\subfloat[][\textbf{DirectRunner: CPU and memory usage at different Pipeline lengths}\\The CPU and memory usage remained stable at lengths above \num{100} Transforms. The system did not consume all available resources (\SI{800}{\percent} CPU and \SI{4}{GB} memory).]{
-		\includegraphics[height=0.42\textheight]{images/graphs/java_memcpu_double}
+		\makebox[\textwidth]{\includegraphics[height=0.42\textheight]{images/graphs/java_memcpu_double}}
 	}
 	\caption[Results of the latency experiment executed on the DirectRunner, showing its unsuitability.]{The DirectRunner could not maintain sufficient throughput to evaluate the latency of the system under load in a valid way. Data indicate that this is due to the single-threaded design of the runner, not optimised for performance.}
 	\label{fig:eval:latency-graph-java}
@@ -400,12 +440,12 @@ In practice, this pattern of memory consumption proves to be a limiting factor m
 \begin{figure}
     \centering
 	\subfloat[Element latency vs.\ Pipeline length.][\textbf{Elixir: Element latency vs.\ Pipeline length} \\An average of \num{128000} elements per box were measured. Each box shows the median and interquartile range. The outlier threshold is $1.5\times$ the IQR. Extreme outliers above \SI{12}{\milli\second} are omitted.]{
-		\includegraphics[height=0.42\textheight]{images/graphs/elixir_latency_box}
+		\makebox[\textwidth]{\includegraphics[height=0.42\textheight]{images/graphs/elixir_latency_box}}
 		\label{fig:eval:latency-graph-elixir:latency}
 	}
 	
 	\subfloat[Average CPU and memory consumption vs.\ Pipeline length.][\textbf{Elixir: Average CPU and memory consumption vs.\ Pipeline length.} \\ Both resources are consumed with linear growth as the Pipeline length increases, as demonstrated by the good fit of a linear model.]{
-		\includegraphics[height=0.42\textheight]{images/graphs/elixir_memcpu_linear}
+		\makebox[\textwidth]{\includegraphics[height=0.42\textheight]{images/graphs/elixir_memcpu_linear}}
 		\label{fig:eval:latency-graph-elixir:cpumem}
 	}
 	\caption[Results of the latency experiment run executed on the Elixir runner.]{The Elixir runner exhibits good scalability under load. When processing elements at a rate of \SI{100}{\per\second}, even very long Pipelines maintain low latency and jitter while maintaining full throughput. Resource consumption scales linearly and predictably with Pipeline length.}
@@ -415,12 +455,12 @@ In practice, this pattern of memory consumption proves to be a limiting factor m
 \begin{figure}
     \centering
 	\subfloat[][\textbf{Flink: Element latency vs.\ Pipeline length} \\An average of \num{138000} elements per box were measured. Each box shows the median and interquartile range. The outlier threshold is $1.5\times$ the IQR. Extreme outliers above \SI{80}{\milli\second} are omitted.]{
-		\includegraphics[height=0.42\textheight]{images/graphs/java_flink_latency_box}
+		\makebox[\textwidth]{\includegraphics[height=0.42\textheight]{images/graphs/java_flink_latency_box}}
 		\label{fig:eval:latency-graph-flink:latency}
 	}
 	
 	\subfloat[][\textbf{Flink: Average CPU and memory consumption vs.\ Pipeline length.} \\ Both resources are consumed with linear growth as the Pipeline length increases, as demonstrated by the good fit of a linear model.]{
-		\includegraphics[height=0.42\textheight]{images/graphs/java_flink_memcpu_linear}
+		\makebox[\textwidth]{\includegraphics[height=0.42\textheight]{images/graphs/java_flink_memcpu_linear}}
 		\label{fig:eval:latency-graph-flink:cpumem}
 	}
 	\caption[Results of the latency experiment run executed on the Flink runner.]{The Flink runner handles the element stream at full throughput even for longer Pipelines. There is no apparent effect of Pipeline length on element latency in the range tested. Resource consumption scales linearly, but memory usage growth is quite steep even though CPU usage remains low.}
