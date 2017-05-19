@@ -1,21 +1,28 @@
 \chapter{Conclusions}\label{ch:concl}
 
 The project achieved its stated goals and is a success.
+Success criteria were defined as the `successful execution of test cases specified during the preparation phase' (\cref{sec:eval:latency,sec:eval:twitter:throughput}) and the `provision of a well-reasoned argument backed with code examples of code which is easier to write, understand, and better captures the essence of the Model when written using the Elixir DSL compared to the Java API' (\cref{sec:impl:approach:dsl,sec:eval:twitter:code}).
 
-The project has been successful in describing the semantics of the Beam Model to a level of detail necessary for a working implementation.
+The project inferred the semantics of the Beam Model using source code, the Apache issue tracker and the project mailing list.
+These were described to a level of detail necessary for a working implementation in \cref{sec:impl:dataflow}.
 
 A working implementation of the Model was produced in the Elixir programming language, showing its suitability for developing systems such as this one.
-The developer-friendliness of the resultant system was also shown, with paradigms and conventions of the Elixir ecosystem being a great match for the concepts of the Model.
+GenStage~\cite{ElixirGenStage}, a low-level library providing a demand-driven data pipelining actor system with backpressure was used as the backbone of the system.
 
-The implementation was evaluated, and though it was built with the goal of academic implementation of the Model rather than speed, it displayed excellent performance characteristics when pitted against both the local Beam runner and the optimised Apache Beam runner.
+The implementation was evaluated, and though it was built with the aim of functionality, not performance, it displayed excellent performance characteristics when pitted against both the local Beam runner and the optimised Apache Beam runner.
+It was able to sustain a sub-\SI{10}{\milli\second} median latency when passing a busy (\SI{100}{\per\second}) stream of elements through a \num{2000}-Transform Pipeline (\cref{sec:eval:latency}).
 
 Its suitability for real-world scenarios was shown by its performance while processing a large stream of tweets to produce hashtag autocomplete suggestions.
+Replication techniques were employed to show that Elixir Dataflow can compute hashtag autocomplete suggestions on streams of up to \num{25000} tweets per second---a throughput which would allow it to process the entire Twitter Firehose ($\sim$\num{7000} tweets per second) three times over~(\cref{sec:eval:twitter:throughput}).
 
-The implementation lacks some features such as the ability to support branching pipelines.
-These would be relatively simple to add but have been omitted due to time constraints.
-Further, the implementation forgoes many optimisations which could be made.
-Other implementations have introduced Transform coalescing, where several Elementwise Transforms in a row could be merged into one which applies the compound operation.
-There is also no automatic Transform-level parallelisation, where a Collection is automatically partitioned and processed concurrently/in parallel.
+The developer-friendliness of the resultant system was also demonstrated, with a real-world example requiring over \num6$\times$ less code to implement than Java~(\cref{sec:eval:twitter:code}).
+The paradigms and conventions of the Elixir ecosystem are a great match for the concepts of the Model (\cref{sec:impl:approach:dsl}).
+
+All Beam implementations lack full support for all of the features (\cref{sec:eval:limitations}) and Elixir Dataflow is no different.
+Some of these features---such as branching Pipeline support---would be relatively simple to add but have been omitted due to time constraints.
+Further, the implementation forgoes several possible optimisations.
+Other implementations have introduced Transform coalescing, where several Elementwise Transforms in sequence can be merged into one which applies the compound operation.
+There is also no automatic Transform-level parallelisation, where a Collection is automatically partitioned and processed concurrently.
 The lack of this optimisation proved to be the limiting factor when evaluating the Twitter Pipeline throughput.
 
 The seamless distribution of the system across a cluster of nodes would be an important step towards handling production loads.

@@ -23,7 +23,7 @@ Name:               & \textbf {Mateusz Jadczak}                       \\
 College:            & \textbf {Robinson}                     \\
 Project Title:      & {\setstretch{0.8}\textbf{An implementation of Google Dataflow in the Elixir programming language}} \\
 Examination:        & \textbf {Computer Science Tripos -- Part II, June 2017}  \\
-Word Count:         & $\sim$11,500\footnotemark[1]  \\
+Word Count:         & $\sim$11,700\footnotemark[1]  \\
 Project Originators: & Dr Alastair Beresford \& Dr Martin Kleppmann     \\
 Supervisor:         &   Dr Alastair Beresford           \\ 
 \end{tabu}
@@ -45,8 +45,9 @@ A DSL was implemented which requires significantly less code to express Model co
 It also adopts standard Elixir idioms.
 A full Beam-like runner was implemented in Elixir, instead of interfacing with a Java runner.
 
-The runner implemented can execute computation Pipelines expressed in the DSL and contains a subset of features of Beam.
+The runner implemented can execute computation Pipelines expressed in the DSL and supports a large number of core Beam features useful in common applications.
 It displays superior performance under load in terms of resource usage, throughput and latency when compared against both the local Beam Java runner and the production-optimised Apache Flink runner.
+An experiment using a replicated Twitter API stream shows that the implementation is capable of throughput of over \num3$\times$ the entire Twitter Firehose.
 
 \section*{Special difficulties}
 

@@ -7,7 +7,8 @@ The ability to flexibly process large, heterogeneous and asynchronous streams of
 
 Of particular interest are datasets which are unordered and unbounded.
 Lack of order arises not just due to clock skew and network latencies.
-For instance, consider the issue of tracking play counts of songs on a service like Spotify, where some plays may occur using cached data stored offline, not being sent to the servers until hours later.
+For instance, consider the issue of tracking play counts of songs on a service like Spotify, where some plays may occur using cached data stored offline.
+Metadata may not be sent to the cloud for analysis until hours later.
 
 Suppose we need to aggregate the track play events into user sessions, defined as play events occurring sufficiently close to each other.
 The amount of complexity and number of special cases even in this reasonable scenario are too large to consider its implementation as a discrete system.
@@ -27,7 +28,7 @@ It acknowledges the fact that it is impossible to design an always correct, low-
 \section{Goals and focus}\label{sec:intro:goals}\label{sec:intro:results}
 
 Originally, the goal of the project was to write an Elixir SDK compatible with existing Beam software.
-Several weeks into the research it emerged that this approach was impractical to achieve due to the tight coupling of Beam runners to its Java SDK.
+Several weeks into the research it emerged that this approach was impractical to achieve due to the tight coupling of Beam runners to the Java SDK.
 
 Instead, a standalone Beam-like runner was implemented which could execute Pipelines defined with the Elixir SDK.
 Due to the lack of explicit technical documentation of the Model, it became clear that in order to achieve this, a significant amount of in-depth research was necessary.
@@ -85,4 +86,4 @@ The \emph{de facto} official implementation of the Dataflow Model~\cite{Akidau:2
 Dataflow will be used to refer to the high-level theoretical model, with Beam reserved for the project itself or extensions to the Dataflow Model that it introduces.
 
 The virtual machine which powers Erlang and Elixir is called the BEAM.
-In this unfortunate case of overloading, the Apache project will be referred to as Beam, with all-uppercase BEAM being reserved for the virtual machine.
+In this unfortunate case of overloading, the Apache project will be referred to as Beam, with all-uppercase BEAM reserved for the virtual machine.

@@ -4,7 +4,7 @@
 The project fulfilled all its success criteria and was successfully completed.
 
 A large subset of Beam features were implemented in Elixir Dataflow~(\cref{sec:eval:limitations}).
-The DSL developed followed patterns native to Elixir.
+A DSL was created which follows patterns native to Elixir.
 It allows for low-impedance translation of a conceptual Dataflow Pipeline to its representation in code, achieving a dramatic reduction in code size over a Java version~(\cref{sec:eval:twitter:code}).
 
 Elixir Dataflow displays performance superior to the optimised Apache Flink Beam runner, proving able to deal with busy streams of data and large Pipelines while displaying excellent latency characteristics and scalability~(\cref{sec:eval:latency}).
@@ -68,10 +68,11 @@ The Beam Capability Matrix~\cite{Beam-Cap-Matrix} is a standard method of featur
 \end{table}
 
 As the Matrix demonstrates, no implementation is feature-complete in spite of Beam containing core Java classes to be used as the basis for feature implementation---something this project could not take advantage of.
-Over the course of this Part~II project, a significant subset of features were implemented.
+Over the course of this Part~II project, a significant amount of features were implemented.
+The features omitted, such as Side Inputs, Sources and Aggregators, were ones which would require a lot of code support but focused on ancillary functions rather than the core Model.
 The only limitation not shown in \cref{tab:eval:capability} is the lack of support for non-linear Pipelines.
 
-Some core modules were implemented using na\"ive algorithms to save on time.
+Some core modules were implemented using na\"ive algorithms to save time.
 For instance, a linear list-based priority queue was used in several grouping and windowing algorithms.
 In spite of this, the performance of the implementation was excellent, as the rest of this chapter shows.
 
@@ -107,7 +108,7 @@ Tweets tend to include \emph{hashtags}, words or short phrases preceded by the \
 Hashtags rely on many users using the exact hashtag text in their tweets.
 The hashtag can then be used to aggregate and list all of these tweets, perhaps all on a particular topic.
 
-An autocomplete functionality would be useful when composing tweets to suggest popular hashtags and discourage misspellings.
+An autocomplete feature would be useful when composing tweets to suggest popular hashtags and discourage misspellings.
 This real-world scenario formed the basis of an evaluation exercise.
 
 Twitter's free streaming API~\cite{TwitterStreamingAPI} was used to receive a stream of English-language tweets.
@@ -120,7 +121,7 @@ Each of these was derived from tweets seen in the preceding \SI{3}{\min}.
 
 \Cref{fig:eval:twitter-pipeline-dag} illustrates the Pipeline used to process the tweets.
 In a real web application, the results would be sent to another process or published to a message broker in order to enable a web server to handle user requests for autocompletion suggestions.
-For the purposes of this experiment they were just logged to the console.
+For the purposes of this experiment they were logged to the console.
 
 \begin{figure}
 	\centering
@@ -134,8 +135,9 @@ The scenario provides a good way to test various features of the Model.
 Sliding windowing is used, and multiple stages of aggregation are employed.
 The Pipeline utilises both Elementwise and Grouping Transforms.
 
-The free stream provided by Twitter delivers \num{50}--\num{80} tweets per second, up to \SI{1}{\percent} of all matching tweets.
-To simulate a larger stream and evaluate the throughput of the runner, a configurable way to replicate each tweet by a multiplicative factor was added to the experiment.
+The free stream provided by Twitter delivers \num{40}--\num{70} tweets per second, up to \SI{1}{\percent} of the Firehose ($\sim$\num{7000} tweets per second).
+Over the execution of the experiment, an average rate of \num{50} tweets per second was observed.
+To simulate a larger stream and evaluate the throughput of the runner, a configurable way to replicate each tweet by a multiplicative factor was added.
 
 The ability to keep up with the stream and be able to output a batch of data derived from the preceding \SI{3}{\min} every \SI{1}{\min} indicates success in the experiment.
 
@@ -150,10 +152,6 @@ The Pipeline was implemented in both Java (Beam) and Elixir.
 The full code is available in \cref{apx:twitter-code}; what follows is a comparison of selected excerpts which illustrate differences between the two.
 
 The Java code is noticeably longer, requiring 220 lines of code (excluding blank lines and comments) compared to the 35 lines required in Elixir.
-
-\subsubsection{Reading tweets}
-
-One of the primary reasons for the length of the Java version is the necessary method of consuming the stream of tweets.
 
 \begin{codelisting}
 	\caption{Reading a Twitter stream as an unbounded source in Elixir.}
@@ -216,6 +214,10 @@ p.apply("GetTweets", Read.from(TwitterSource.withTerms(terms)))
 	\end{minted}
 \end{codelisting}
 
+\subsubsection{Reading tweets}
+
+One of the primary reasons for the length of the Java version is the necessary method of consuming the stream of tweets.
+
 The Elixir standard library provides a way to deal with potentially unbounded, lazy data---\exs{Stream}s.
 As such, it makes sense that one of the Root Transforms implemented in Elixir Dataflow is \exs{IO.read_stream}.
 
@@ -246,6 +248,7 @@ It is clear that Elixir's conventions around \exs{Stream}s and decoupled, modula
 The Dataflow Model adopts an intrinsically functional model of computation based on data transformations.
 Java's support for this model is poor.
 This is exemplified best by the need to specify logic in small internal classes as in \cref{lst:eval:twitter-lambdas-java}.
+\Cref{lst:eval:twitter-lambdas-elixir} shows that Elixir, a functional language, excels at expressing these kinds of computation natively.
 
 \begin{codelisting}
 	\caption[Using internal classes to specify transformation logic in Java.]{In Java, there is often a need to use internal classes to specify logic. While Java~8 lambdas can be used, the lack of type inference means that internal classes are often a cleaner solution.}
@@ -296,8 +299,6 @@ extends SimpleFunction<KV<String, List<KV<String, Long>>>, KV<String, List<Strin
 	\end{minted}
 \end{codelisting}
 
-\Cref{lst:eval:twitter-lambdas-elixir} shows that Elixir, a functional language, excels at expressing these kinds of computation natively.
-
 \subsubsection{Summary}
 
 Though formal user studies were not performed to assess the ease of use of the two SDKs empirically, the preceding examples show that Elixir as a language is much better suited to express the concepts of the Dataflow Model in code.
@@ -307,7 +308,8 @@ Even when a fluent API and Java~8 lambdas are employed, the lack of type inferen
 
 \subsection{Throughput evaluation}\label{sec:eval:twitter:throughput}
 
-The Elixir Twitter Pipeline was executed with the multiplicative factor varying from \num1 to \num{10000} in order to determine the maximal throughput of the Pipeline.
+The Elixir Twitter Pipeline was executed with the multiplicative factor varying from \num1 to \num{10000}, i.e.\ approximately between \num{50} and \num{500000} tweets per second, in order to determine the maximal throughput of the Pipeline.
+For comparison, the Twitter Firehose has an average tweet rate of \SI{7000}{\per\second}.
 Each experiment was run for \SI{9}{\min}, allowing for \num9 discrete panes of output, spanning \num3 disjoint time intervals.
 
 \begin{figure}
@@ -328,7 +330,7 @@ It was found that a factor of \num{750}, translating to approximately \num{37500
 
 \Cref{fig:eval:twitter:throughput}\subref{fig:eval:twitter:throughput:500} shows the results when $F = 500$.
 The Pipeline is keeping up with the stream---the Event and Count watermarks stay almost exactly \SI{30}{\second} behind the true watermark (as per the heuristic used).
-The Output watermark indicates that a pane is output every minute---when this happens, a watermark hold is released and the Output watermark can advance to the next window being buffered.
+The Output watermark indicates that a pane is output every minute---when this happens, a watermark hold is released and the Output watermark can advance to the next window.
 The CPU trace shows that mostly two hyperthreads are busy processing data with periods of idleness.
 On pane output, a third hyperthread does work, indicated by spikes towards \SI{300}{\percent} CPU usage.
 
@@ -344,8 +346,9 @@ Here, the optimisation would likely boost possible throughput by a significant f
 
 \subsubsection{Conclusions}
 
-The Pipeline can sustain a processing speed of over \num{25000} tweets per second.
-Keeping in mind that each hashtag in each tweet is exploded into all of its possible prefixes, this is very impressive performance in a real-world scenario, with a host of optimisations yet to be implemented.
+The Pipeline can sustain a processing speed of over \num{25000} tweets per second, over three times the average Twitter Firehose rate.
+Keeping in mind that each hashtag in each tweet is exploded into all of its possible prefixes, this is very impressive performance in a real-world scenario.
+Several optimisations such as Transform coalescing and auto-parallelisation yet to be implemented have the potential to push the performance even further.
 
 \begin{figure}
 	\centering
@@ -450,7 +453,7 @@ This scenario is common in JVM applications.
 
 The Elixir runner outperforms Flink with respect to latency across the experimental range, displaying \num{10}--\num{300}$\times$~lower median latency with significantly lower IQR.
 It is able to maintain its excellent scalability at Pipeline lengths at which the Flink runner fails to initialise, in spite of not being designed with performance in mind.
-This illustrates the power of the BEAM VM to execute extremely concurrent systems in a performant manner while maintaining low resource overheads.
+This illustrates the power of the BEAM VM to execute concurrent systems in a performant manner while maintaining low resource overheads.
 
 The resource consumption of both runners scales linearly with Pipeline length, though Flink consumes as much as \num{60}$\times$~more memory in spite of lower CPU usage.
 In practice, this pattern of memory consumption proves to be a limiting factor much before the CPU usage of Elixir does.

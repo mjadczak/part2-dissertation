@@ -325,19 +325,12 @@ Often, core modules had to be re\"implemented as the model grew more complete.
 The Elixir language, with its modular structure and a convention of writing simple, composable functions enabled easy refactoring of core code when necessary.
 
 A spiral model~\cite{Boehm:1986} of development was adopted with core modules prototyped, integrated, and then refactored, extended or rewritten as other parts of the system demanded it.
-The process is illustrated in \cref{fig:prep:spiral-model}.
-
 Overall, three or four iterations of prototyping and evaluation were performed, going from a basic proof-of-concept to a working, performant system implementing many features of the Model.
+Initially, work focused on developing a working DSL which could produce Pipeline description.
 
-\begin{figure}
-	\centering
-	\includegraphics[width=0.6\textwidth]{images/temp/spiral}
-	\caption{The spiral model of development as used in this project.}
-	\label{fig:prep:spiral-model}
-\end{figure}
-
-
-\todo{Flesh the diagram out more, indicate the features completed at each prototype iteration.}
+Focus then shifted to the Pipeline runner.
+Initially, a very simple version was implemented, supporting only batch processing with global windows.
+At each iteration, the work done was compared with the Beam implementation and the next set of features to be researched and prototyped was identified.
 
 \subsection{Source code management}\label{sec:prep:softeng:scm}
 
