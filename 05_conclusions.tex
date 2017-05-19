@@ -1,34 +1,26 @@
 \chapter{Conclusions}\label{ch:concl}
-\section{Goals achieved}\label{sec:concl:goals}
 
-\todo{tie in goals}
+The project achieved its stated goals and is a success.
 
-Overall, the project achieved its stated goals and is a success.
+The project has been successful in describing the semantics of the Beam Model to a level of detail necessary for a working implementation.
 
-The project has been successful in describing the semantics of the Beam Model to a high level of detail necessary for a working implementation, rather than the high-level overview found in the original paper.
-These were extracted from the Beam codebase and community discussions and compiled together in one document for---to the knowledge of the author---the first time.
-This work is likely to prove useful in approaching the Dataflow Model and Beam from a theoretical or analysis perspective.
-
-A working implementation of the Model was also produced in the Elixir programming language, showing its suitability for developing systems such as this one.
+A working implementation of the Model was produced in the Elixir programming language, showing its suitability for developing systems such as this one.
 The developer-friendliness of the resultant system was also shown, with paradigms and conventions of the Elixir ecosystem being a great match for the concepts of the Model.
 
-The implementation was evaluated, and though it was built with the goal of academic implementation of the Model rather than speed, it displayed robust performance characteristics when pitted against the standard Beam implementation.
+The implementation was evaluated, and though it was built with the goal of academic implementation of the Model rather than speed, it displayed excellent performance characteristics when pitted against both the local Beam runner and the optimised Apache Beam runner.
 
-\section{Lessons learned}\label{sec:concl:lessons}
-\section{Further work}\label{sec:concl:further}
+Its suitability for real-world scenarios was shown by its performance while processing a large stream of tweets to produce hashtag autocomplete suggestions.
 
-While the semantics of the Dataflow Model have been thoroughly described in this document, and an implementation produced, there still remains a lot of work to be done in the area, both on the Model itself and potentially on the Elixir implementation.
-
-The implementation itself lacks some important features such as the ability to support branching pipelines (multiple inputs / output per Transform).
-These would be relatively simple to add given the current structure and the syntactic flexibility we can get with Elixir, but have been omitted due to time constraints.
+The implementation lacks some features such as the ability to support branching pipelines.
+These would be relatively simple to add but have been omitted due to time constraints.
 Further, the implementation forgoes many optimisations which could be made.
-For example, the priority queue being used in certain key parts of the grouping algorithm is a simple linear list-based implementation.
-Other implementations have introduced Transform coalescing, where several ``mapping'' transforms in a row could be merged into one which applies the compound operation, allowing for clarity of user code while avoiding the increased overhead of instantiating more Transform Executors.
+Other implementations have introduced Transform coalescing, where several Elementwise Transforms in a row could be merged into one which applies the compound operation.
 There is also no automatic Transform-level parallelisation, where a Collection is automatically partitioned and processed concurrently/in parallel.
+The lack of this optimisation proved to be the limiting factor when evaluating the Twitter Pipeline throughput.
 
-Another important development which would need to happen were this system to be used on production-scale datasets is its seamless distribution across a cluster of nodes.
-OTP and the BEAM VM give us fantastic tools and primitives which make this ecosystem a great candidate for implementing such a solution, but this does not mean that such a distributed problem suddenly becomes easy.
+The seamless distribution of the system across a cluster of nodes would be an important step towards handling production loads.
+OTP and the BEAM VM provide fantastic tools and primitives which make the ecosystem an excellent fit for this kind of work, but distributed computation remains intrinsically difficult to control.
 
-Finally, work is ongoing in the Beam community to develop the exact semantics needed to support refinements and retractions as described in the original paper.
-This is a fundamentally difficult problem to solve without an explosion of state which needs to be kept around.
-A robust and general solution to this problem is likely to be an interesting area of research in the future.
+Finally, work is ongoing in the Beam community \cite{JIRA-retractions} to develop the semantics needed to support refinements and retractions as described in the original paper.
+This is a fundamentally difficult problem to solve without an explosion in the size of cached state.
+A general solution to this problem is likely to be an interesting area of research in the future.

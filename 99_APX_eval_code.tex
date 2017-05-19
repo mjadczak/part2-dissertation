@@ -1,17 +1,350 @@
 \chapter{Evaluation listings}\label{apx:twitter-code}
 
 \begin{codelisting}
-\caption{The Twitter example Pipeline implemented in Elixir}
+\caption{The Twitter Pipeline implemented in Elixir}
 \label{lst:apxb:twitter-elixir}
-\begin{minted}[breaklines=true]{elixir}
-# todo
+\begin{minted}[breaklines=true,fontsize={\scriptsize}]{elixir}
+use Dataflow
+alias Dataflow.Transforms.{Core, IO, Windowing, Aggregation}
+alias Dataflow.DirectRunner
+
+alias Dataflow.Utils.Time, as: DTime
+require DTime
+
+parse_as_timestamp = fn string ->
+  string
+  |> Timex.parse!("{WDshort} {Mshort} {0D} {h24}:{0m}:{0s} {Z} {YYYY}")
+  |> DateTime.to_unix
+  |> DTime.timestamp(:seconds)
+end
+
+p = Pipeline.new runner: DirectRunner
+
+p
+~> "Read Stream" -- IO.read_stream(fn -> ExTwitter.stream_filter(track: "tech,technology,Apple,Google,Twitter,Facebook,Microsoft,
+iPhone,Mac,Android,computers,CompSci,science", language: "en") end)
+~>([label: "Extract Timestamps", stats_id: "event_watermark"] <> Windowing.with_timestamps(&parse_as_timestamp.(&1.created_at), delay_watermark: {30, :seconds, :event_time}))
+~> Core.flat_map(fn tweet -> for _ <- 1..stream_multiply, do: tweet end)
+~> "Window Elements" -- Windowing.window(into: {:sliding, size: {3, :minutes}, period: {1, :minutes}})
+~> "Extract Hashtags" -- Core.flat_map(fn tweet ->
+  case tweet.entities[:hashtags] do
+    nil -> []
+    [] -> []
+    list ->
+      list
+      |> Enum.map(fn %{text: text} -> text end)
+  end
+ end)
+~> [stats_id: "fst_aggregate_watermark"] <> Aggregation.count_elements()
+~> "Generate Prefixes" -- Core.flat_map(fn {tag, count} ->
+  len = String.length tag
+  for i <- 0..(len-1), downcased = String.downcase(tag), prefix = String.slice(downcased, 0..i), do: {prefix, {tag, count}}
+ end)
+~> Aggregation.top_per_key(3, compare: fn {_tag1, count1}, {_tag2, count2} -> count1 <= count2 end)
+~> "Discard Exact Counts" -- Core.map(fn {prefix, tcs} -> {prefix, Enum.map(tcs, fn {tag, _count} -> tag end)} end)
+~> [stats_id: "output_watermark"] <> Core.each(fn x -> Elixir.IO.puts "#{inspect x}" end)
+
+Pipeline.run p, sync: true
 \end{minted}
 \end{codelisting}
-
+\newpage
 \begin{codelisting}
-\caption{The Twitter example Pipeline implemented in Java}
+\caption{The Twitter Pipeline implemented in Java}
 \label{lst:apxb:twitter-java}
-\begin{minted}[breaklines=true]{java}
-// todo
+\begin{minted}[breaklines=true,fontsize={\scriptsize}]{java}
+package uk.ac.cam.cl.mnj24.dataflow.examples;
+
+import org.apache.beam.sdk.Pipeline;
+import org.apache.beam.sdk.coders.AvroCoder;
+import org.apache.beam.sdk.coders.Coder;
+import org.apache.beam.sdk.coders.CoderRegistry;
+import org.apache.beam.sdk.coders.SerializableCoder;
+import org.apache.beam.sdk.io.Read;
+import org.apache.beam.sdk.io.UnboundedSource;
+import org.apache.beam.sdk.options.PipelineOptions;
+import org.apache.beam.sdk.options.PipelineOptionsFactory;
+import org.apache.beam.sdk.transforms.*;
+import org.apache.beam.sdk.transforms.windowing.SlidingWindows;
+import org.apache.beam.sdk.transforms.windowing.Window;
+import org.apache.beam.sdk.values.KV;
+import org.apache.beam.sdk.values.TypeDescriptor;
+import org.apache.beam.sdk.values.TypeDescriptors;
+import org.joda.time.Duration;
+import org.joda.time.Instant;
+import org.joda.time.ReadableDuration;
+import twitter4j.*;
+
+import javax.annotation.Nullable;
+import java.io.IOException;
+import java.io.Serializable;
+import java.util.*;
+import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.stream.Collectors;
+
+public class TwitterHashtags {
+    // Don't worry about checkpoints, since we have no access to any sort of cursor in the stream anyway
+    static class DummyCheckpoint implements UnboundedSource.CheckpointMark, Serializable {
+
+        @Override
+        public void finalizeCheckpoint() throws IOException {
+            // nothing to do
+        }
+    }
+
+    /**
+     * Pulls from global Twitter4J config, only returns a filter stream with given terms, and only in English.
+     * Not a general purpose source. Will not work on distributed runners.
+     * Does not support splitting/partitioning the stream.
+     * Uses an internal buffer in the reader, with no support for pausing/checkpointing/offloading to external storage.
+     */
+    static class TwitterSource extends UnboundedSource<Status, DummyCheckpoint> {
+
+        private String[] terms;
+
+        private TwitterSource(String... terms) {
+            this.terms = terms;
+        }
+
+        public static TwitterSource withTerms(String... terms) {
+            return new TwitterSource(terms);
+        }
+
+        @Override
+        public List<? extends UnboundedSource<Status, DummyCheckpoint>> split(int desiredNumSplits, PipelineOptions options) throws Exception {
+            // Don't support splitting
+            return Collections.singletonList(this);
+        }
+
+        @Override
+        public UnboundedReader<Status> createReader(PipelineOptions options, @Nullable DummyCheckpoint checkpointMark) throws IOException {
+            return new Reader(terms, this);
+        }
+
+        @Override
+        public Coder<DummyCheckpoint> getCheckpointMarkCoder() {
+            return SerializableCoder.of(DummyCheckpoint.class);
+        }
+
+        @Override
+        public void validate() {
+            if (terms == null || terms.length == 0) throw new IllegalArgumentException("Must pass in terms to track");
+        }
+
+        @Override
+        public Coder<Status> getDefaultOutputCoder() {
+            return SerializableCoder.of(Status.class);
+        }
+
+        // This maintains a static streaming listener, because the Dataflow runner exercises start-stop functionality, but this causes us to hit a rate limit in Twitter.
+
+        protected static class Reader extends UnboundedSource.UnboundedReader<Status> implements StatusListener {
+
+            private Queue<Status> statuses = new ConcurrentLinkedQueue<>();
+            private String[] terms;
+            private static AtomicReference<TwitterStream> streamRef = new AtomicReference<>(null);
+            private AtomicReference<Status> currentStatus = new AtomicReference<>(null);
+            private AtomicReference<Instant> highPoint = new AtomicReference<>(new Instant(Long.MIN_VALUE));
+
+            private final Duration delayDuration = Duration.standardSeconds(30);
+            private final Instant earliestSafeWM = new Instant(Long.MIN_VALUE).plus(delayDuration);
+
+            private TwitterSource parentSource;
+
+            private Reader(String[] terms, TwitterSource source) {
+                this.terms = terms;
+                parentSource = source;
+            }
+
+            @Override
+            public boolean start() throws IOException {
+                TwitterStream stream = streamRef.get();
+
+                if (stream != null) {
+                    stream.addListener(this);
+                    return advance();
+                }
+
+                stream = TwitterStreamFactory.getSingleton();
+
+                stream.addListener(this);
+                FilterQuery query =
+                        new FilterQuery()
+                        .track(terms)
+                        .language("en");
+
+                stream.filter(query); // Starts listening in a separate thread
+
+                streamRef.set(stream);
+
+                return advance();
+            }
+
+            @Override
+            public boolean advance() throws IOException {
+                Status newStatus = statuses.poll();
+                Status oldStatus = currentStatus.get();
+                if (newStatus == null) return false;
+
+                currentStatus.compareAndSet(oldStatus, newStatus);
+                trackWatermark(newStatus);
+
+                return true;
+            }
+
+            private void trackWatermark(Status status) {
+                Instant currentHP = highPoint.get();
+                Instant possibleNewHP = new Instant(status.getCreatedAt());
+
+                if (currentHP.compareTo(possibleNewHP) < 0) {
+                    highPoint.compareAndSet(currentHP, possibleNewHP);
+                }
+            }
+
+            @Override
+            public Status getCurrent() throws NoSuchElementException {
+                Status status = currentStatus.get();
+                if (status == null) throw new NoSuchElementException();
+                return status;
+            }
+
+            @Override
+            public Instant getCurrentTimestamp() throws NoSuchElementException {
+                Status status = currentStatus.get();
+                Date createdAt = status.getCreatedAt();
+                return new Instant(createdAt);
+            }
+
+            @Override
+            public void close() throws IOException {
+                TwitterStream stream = streamRef.get();
+                if (stream == null) return;
+
+                stream.removeListener(this);
+
+//                stream.shutdown();
+//                stream.cleanUp();
+//                stream.clearListeners();
+
+//                streamRef.compareAndSet(stream, null);
+            }
+
+            @Override
+            public Instant getWatermark() {
+
+                Instant hp = highPoint.get();
+                if (hp.compareTo(earliestSafeWM) < 0) {
+                    return hp;
+                }
+                else {
+                    return hp.minus(delayDuration); // delay watermark
+                }
+            }
+
+            @Override
+            public CheckpointMark getCheckpointMark() {
+                return new DummyCheckpoint();
+            }
+
+            @Override
+            public UnboundedSource<Status, ?> getCurrentSource() {
+                return parentSource;
+            }
+
+            @Override
+            public void onStatus(Status status) {
+                statuses.add(status);
+            }
+
+            @Override
+            public void onDeletionNotice(StatusDeletionNotice statusDeletionNotice) {
+            }
+
+            @Override
+            public void onTrackLimitationNotice(int numberOfLimitedStatuses) {
+            }
+
+            @Override
+            public void onScrubGeo(long userId, long upToStatusId) {
+            }
+
+            @Override
+            public void onStallWarning(StallWarning warning) {
+            }
+
+            @Override
+            public void onException(Exception ex) {
+                ex.printStackTrace();
+            }
+        }
+    }
+
+    public static class GeneratePrefixesFn extends SimpleFunction<KV<String, Long>, List<KV<String, KV<String, Long>>>> {
+        @Override
+        public List<KV<String, KV<String, Long>>> apply(KV<String, Long> tagWithCount) {
+            List<KV<String, KV<String, Long>>> result = new ArrayList<>();
+            String downcased = tagWithCount.getKey().toLowerCase();
+
+            for (int i = 1; i <= downcased.length(); i++) {
+                String prefix = downcased.substring(0, i);
+                result.add(KV.of(prefix, tagWithCount));
+            }
+
+            return result;
+        }
+    }
+
+    public static class ComparePrefixesWithCounts implements Comparator<KV<String, Long>>, Serializable {
+        @Override
+        public int compare(KV<String, Long> o1, KV<String, Long> o2) {
+            return Long.compare(o1.getValue(), o2.getValue());
+        }
+    }
+
+    public static class DiscardCountsFn extends SimpleFunction<KV<String, List<KV<String, Long>>>, KV<String, List<String>>> {
+        @Override
+        public KV<String, List<String>> apply(KV<String, List<KV<String, Long>>> el) {
+            List<String> prefixes = el.getValue().stream().map((KV::getKey)).collect(Collectors.toList());
+            return KV.of(el.getKey(), prefixes);
+        }
+    }
+
+    public static class PrintToConsoleFn extends SimpleFunction<KV<String, List<String>>, KV<String, List<String>>> {
+        @Override
+        public KV<String, List<String>> apply(KV<String, List<String>> el) {
+            System.out.format("%s: %s\n", el.getKey(), Arrays.toString(el.getValue().toArray()));
+            return el;
+        }
+    }
+
+    public static void main(String args[]) {
+        PipelineOptions options = PipelineOptionsFactory.fromArgs(args).withValidation().as(PipelineOptions.class);
+        Pipeline p = Pipeline.create(options);
+
+        //Set coders
+        CoderRegistry cr = p.getCoderRegistry();
+        cr.registerCoder(HashtagEntity.class, SerializableCoder.of(HashtagEntity.class));
+
+        String[] terms = {"tech", "technology", "Apple", "Google", "Twitter", "Facebook", "Microsoft", "iPhone", "Mac", "Android", "computers", "CompSci", "science"};
+
+
+        p
+        .apply("GetTweets", Read.from(TwitterSource.withTerms(terms)))
+        .apply(Window.<Status>into(SlidingWindows.of(Duration.standardMinutes(10))
+                                                 .every(Duration.standardMinutes(1))))
+        .apply("ExtractHashtagEntities",
+                FlatMapElements
+                        .into(new TypeDescriptor<HashtagEntity>() {})
+                        .<Status>via((Status s) -> Arrays.asList(s.getHashtagEntities())))
+        .apply("ExtractHashtagText", MapElements.into(TypeDescriptors.strings()).via(HashtagEntity::getText))
+        .apply(Count.perElement())
+        .apply("GeneratePrefixes", FlatMapElements.via(new GeneratePrefixesFn()))
+        .apply(Top.perKey(3, new ComparePrefixesWithCounts()))
+        .apply("DiscardCounts", MapElements.via(new DiscardCountsFn()))
+        .apply("PrintToConsole", MapElements.via(new PrintToConsoleFn()));
+
+        p.run();
+    }
+}
 \end{minted}
 \end{codelisting}

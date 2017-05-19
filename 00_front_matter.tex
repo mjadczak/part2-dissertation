@@ -41,12 +41,12 @@ To implement a Domain Specific Language (DSL) for the construction of Apache Bea
 
 \section*{Work completed}
 
-A DSL was implemented which required significantly less code to express concepts than the Java API.
-It also adopted standard Elixir idioms.
-A full Beam-like runner was also implemented in Elixir, instead of interfacing with a Java runner.
+A DSL was implemented which requires significantly less code to express Model concepts than the Java API.
+It also adopts standard Elixir idioms.
+A full Beam-like runner was implemented in Elixir, instead of interfacing with a Java runner.
 
 The runner implemented can execute computation Pipelines expressed in the DSL and contains a subset of features of Beam.
-It displays superior performance under load in terms of resource usage, throughput and latency when compared against the local Beam Java runner.
+It displays superior performance under load in terms of resource usage, throughput and latency when compared against both the local Beam Java runner and the production-optimised Apache Flink runner.
 
 \section*{Special difficulties}
 

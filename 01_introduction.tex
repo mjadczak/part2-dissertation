@@ -5,38 +5,37 @@
 In today's fast-moving world of technology, data is king.
 The ability to flexibly process large, heterogeneous and asynchronous streams of data is core to many businesses, and this need is only increasing~\cite{Yin_2015}\cite{mit_bean_variety}.
 
-Of particular interest are datasets which are inherently unordered and unbounded.
+Of particular interest are datasets which are unordered and unbounded.
 Lack of order arises not just due to clock skew and network latencies.
 For instance, consider the issue of tracking play counts of songs on a service like Spotify, where some plays may occur using cached data stored offline, not being sent to the servers until hours later.
 
 Suppose we need to aggregate the track play events into user sessions, defined as play events occurring sufficiently close to each other.
 The amount of complexity and number of special cases even in this reasonable scenario are too large to consider its implementation as a discrete system.
-There is a clear need for an underlying data model and abstraction in order to sanely manage these kinds of computations.
+There is a clear need for an underlying data model and abstraction in order to manage these kinds of computations.
 
-Solutions to this problem have been proposed and implemented in open-source systems such as Apache Storm~\cite{apache_storm} and Spark Streaming~\cite{spark:zaharia2013discretized}, as well as in company-internal projects like Google's MillWheel~\cite{akidau2013millwheel}.
+Solutions to this problem have been proposed and implemented in open-source systems such as Apache Storm~\cite{apache_storm} and Spark Streaming~\cite{spark:zaharia2013discretized}, as well as in internal projects like Google's MillWheel~\cite{akidau2013millwheel}.
 These projects focus on the use of \emph{stream processing}---they model inputs as possibly unbounded streams of data.
-While assorted techniques like windowing and watermark tracking may be applied, these solutions tend to be specialised and fall down in other areas like scalability.
+These solutions tend to be specialised and fall down in areas like scalability or expressiveness.
 
 \section{Motivation for the Dataflow Model}\label{sec:intro:motivation}
 
 The Dataflow Model~\cite{Akidau:2015} provides a unified way of thinking about stream- and batch-oriented processing, resulting in a composable abstraction of computation.
-It acknowledges the fact that it is impossible to design a perfect (always correct, low-latency and cheap) system, and instead it allows for tunability across these characteristics.
+It acknowledges the fact that it is impossible to design an always correct, low-latency and cheap system, and instead allows for tunability across these characteristics.
 
 \Cref{sec:prep:dataflow} dives deep into the Model itself and explains how these aims are achieved, while \cref{ch:impl} contains a detailed overview of the implementation of the Model in practice.
 
 \section{Goals and focus}\label{sec:intro:goals}\label{sec:intro:results}
 
-At the outset, the goal of the project was to write an Elixir-based SDK able to create Pipelines compatible with existing Beam software.
-Several weeks into the research it emerged both that this approach was impractical to achieve, and that the front-end DSL itself was a relatively small task in itself, not suitable to form the entirety of the project.
+Originally, the goal of the project was to write an Elixir SDK compatible with existing Beam software.
+Several weeks into the research it emerged that this approach was impractical to achieve due to the tight coupling of Beam runners to its Java SDK.
 
-The goal then shifted to writing an implementation of a subset of the Beam Model in Elixir.
-However, due to the lack of explicit technical documentation of the Model, it quickly became clear that in order to achieve this, a significant amount of work had to be done to reverse-engineer it from an existing open-source codebase and community discussions.
+Instead, a standalone Beam-like runner was implemented which could execute Pipelines defined with the Elixir SDK.
+Due to the lack of explicit technical documentation of the Model, it became clear that in order to achieve this, a significant amount of in-depth research was necessary.
 As explained in \cref{sec:impl:dataflow}, many concepts have to be introduced in order to implement the Model, but they are not described directly in any reference material.
 
-Therefore, a second goal of the project emerged, which proved to be a major focus---to extend and clarify the Dataflow Model with the concepts found in Apache Beam, such that a fuller, implementation-ready description is produced.
-Once this work was completed, the initial goal of implementing a subset of this extended model was achieved.
+Therefore, a second goal of the project emerged, which proved to be a major focus: to extend and clarify the Dataflow Model with concepts found in Apache Beam, resulting in an implementation-ready description.
 
-Both of these goals were achieved with success, resulting in the detailed description of the Beam Model (\cref{sec:impl:dataflow} and its implementation (\cref{sec:impl:approach}) which exhibited a cleaner, more intuitive developer interface (\cref{sec:eval:twitter:code}) as well as superior performance under load (\cref{sec:eval:latency}).
+Both of these goals were achieved, resulting in the detailed description of the Beam Model~(\cref{sec:impl:dataflow}) and its implementation as Elixir Dataflow~(\cref{sec:impl:approach}) exhibiting a cleaner, more intuitive developer interface~(\cref{sec:eval:twitter:code}) as well as superior performance under load~(\cref{sec:eval:latency}) when compared to Java implementations.
 
 \section{Why Elixir?}\label{sec:intro:elixir}
 
@@ -45,13 +44,13 @@ It is currently most popular in web development circles, with many treating it a
 How then is it a suitable language in which to implement a robust, complex data processing system?
 
 The answer lies in the underpinnings of the language.
-Beneath the shiny, modern exterior lie the battle-hardened BEAM Virtual Machine (VM) and the OTP framework, which have powered Erlang systems in mission-critical industries like telecoms for decades.
+Beneath the modern exterior lie the battle-hardened BEAM Virtual Machine (VM) and the OTP framework, which have powered Erlang systems in mission-critical industries like telecoms for decades~\cite[p.~383]{scalability_erlang_otp}.
 
-Elixir is a dynamically typed, functional language with no variable mutability. 
+Elixir is a dynamically typed functional language. 
 It executes on the BEAM VM which can efficiently manage and schedule hundreds of thousands of \emph{processes}---small user-space threads.
 This invites the use of an actor-based model for applications, and indeed this is the standard approach in the Elixir/BEAM ecosystem.
 
-These built-in primitives allow us to closely implement the desired semantics of the Dataflow Model without the overhead of thousands of lines of scheduling, threading and co\"ordinating\footnotemark[1] code necessary when using Java.
+These built-in primitives allow us to closely implement the semantics of the Dataflow Model without the overhead of thousands of lines of scheduling, threading and co\"ordinating\footnotemark[1] code necessary when using Java.
 
 \footnotetext[1]{
 For the typographically observant reader: the \"{} mark in `co\"ordinating' is a diaeresis---one of the two diacritical marks native to English (the other being the grave, as in `the learn\`ed scholar').
@@ -66,21 +65,21 @@ Since the publication of the Dataflow paper~\cite{Akidau:2015} in 2015, implemen
 Initially, Google released the Google Cloud Dataflow product~\cite{CloudDataflow} along with an SDK to allow users to construct data processing pipelines and run them on Google's cloud infrastructure.
 
 In early 2016, Google open-sourced the project and placed it under the care of the Apache Foundation~\cite{ApacheDataflowPost}.
-This marked the beginning of Apache Beam, whose goals are even wider and include support for cross-platform, cross-language compatibility through separating the creation of the pipelines and their execution on \emph{runners}.
+This became Apache Beam, whose goals are even wider and include cross-platform, cross-language compatibility.
 
-The project has made excellent progress on these fronts, with a fully-featured SDK written in Java as well as a Python SDK.
+The project has made excellent progress on these fronts, creating Java and Python SDKs.
 Its pipelines can be executed on many systems including the Apache projects Spark, Storm and Flink.
-Google Cloud Dataflow remains a paid product capable of running Beam pipelines at scale, but is now only one of many options for doing so.
+Google Cloud Dataflow remains a paid product capable of running Beam pipelines at scale.
 
-Valim has used certain ideas from the Dataflow Model in the development of Flow~\cite{ElixirFlow}, an idiomatic Elixir library for parallel computation.
+Valim adapted ideas from the Dataflow Model in the development of Flow~\cite{ElixirFlow}, an idiomatic Elixir library for parallel computation.
 This drove the development of GenStage~\cite{ElixirGenStage}, a low-level library implementing demand-driven data flow between actor processes.
-The GenStage library forms the backbone of the execution logic in this project, and it is discussed in \cref{sec:impl:approach:concurrency}.
+The GenStage library forms the backbone of the execution logic in this project, and is discussed in \cref{sec:impl:approach:concurrency}.
 
 \section{Terminology}\label{sec:intro:terminology}
 
 There are several similar and overloaded terms employed in this dissertation.
 This section clarifies these.
-For a full list of defined terms, the reader should consult the glossary in \cref{apx:glossary}.
+For a full list of defined terms, consult the glossary in \cref{apx:glossary}.
 
 The \emph{de facto} official implementation of the Dataflow Model~\cite{Akidau:2015} is Apache Beam~\cite{ApacheBeam}, and as such `Dataflow' and `Beam' are often interchangeable.
 Dataflow will be used to refer to the high-level theoretical model, with Beam reserved for the project itself or extensions to the Dataflow Model that it introduces.
