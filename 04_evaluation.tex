@@ -124,7 +124,7 @@ For the purposes of this experiment they were just logged to the console.
 
 \begin{figure}
 	\centering
-	\includegraphics[height=0.5\textheight]{images/temp/eval-twitter-pipeline}
+	\includegraphics[height=0.6\textheight]{images/diags/eval-twitter-pipeline}
 	\caption[The Twitter Pipeline as a Directed Acyclic Graph.]{The Twitter experiment uses a Pipeline representative of a real-world application. The lines-of-code needed to implement each step in the Pipeline are also shown.}
 	\label{fig:eval:twitter-pipeline-dag}
 \end{figure}
@@ -310,7 +310,13 @@ Even when a fluent API and Java~8 lambdas are employed, the lack of type inferen
 The Elixir Twitter Pipeline was executed with the multiplicative factor varying from \num1 to \num{10000} in order to determine the maximal throughput of the Pipeline.
 Each experiment was run for \SI{9}{\min}, allowing for \num9 discrete panes of output, spanning \num3 disjoint time intervals.
 
-\todo{WM instrumentation diagram}
+\begin{figure}
+	\centering
+	\includegraphics[height=0.6\textheight]{images/diags/eval-twitter-watermarks}
+	\caption[The Twitter Pipeline showing the points at which watermarks were measured.]{The Pipeline was instrumented to log the watermark at several points in the Pipeline. The Ideal watermark is not a real measurement. Rather, it is used for comparison.}
+	\label{fig:eval:twitter:pipeline-instrument}
+\end{figure}
+
 
 The Pipeline was instrumented to log the watermark at three points, as \cref{fig:eval:twitter:pipeline-instrument} illustrates.
 Additionally, CPU and memory usage were collected twice per second.
@@ -344,11 +350,11 @@ Keeping in mind that each hashtag in each tweet is exploded into all of its poss
 \begin{figure}
 	\centering
 	\subfloat[][\textbf{Elixir: Twitter Pipeline execution at \pmark\num{25000} tweets per second}\\The Event and Count watermarks remain steady at \SI{30}{\second} behind the Ideal WM. The Output WM indicates that a pane of output is delivered every minute, as required. The CPU trace shows that there are periods where the CPU is idle.]{
-		\makebox[\textwidth]{\includegraphics[height=0.42\textheight]{images/graphs/twitter_wm_500}}
+		\makebox[\textwidth]{\includegraphics[height=0.41\textheight]{images/graphs/twitter_wm_500}}
 		\label{fig:eval:twitter:throughput:500}
 	}\\
 	\subfloat[][\textbf{Elixir: Twitter Pipeline execution at \pmark\num{37500} tweets per second}\\The Event WM steadily falls behind the Ideal WM, and the Count WM falls behind even further. The Output WM shows output is no longer delivered every minute. The CPU trace shows the code is exhausting two hyperthreads, not able to parallelise further.]{
-		\makebox[\textwidth]{\includegraphics[height=0.42\textheight]{images/graphs/twitter_wm_750}}
+		\makebox[\textwidth]{\includegraphics[height=0.41\textheight]{images/graphs/twitter_wm_750}}
 		\label{fig:eval:twitter:throughput:750}
 	}
 	\caption[Watermark and CPU traces of the Elixir runner executing the Twitter Pipeline at two different values of the multiplicative factor.]{The Elixir runner can keep the Twitter Pipeline on time when the multiplicative factor $F$ is \num{500}, but falls behind when it is \num{750}. The CPU usage trace indicates that the bottleneck is the single-threaded execution of Elementwise Transforms.}
@@ -363,9 +369,14 @@ Notwithstanding the Model's powerful windowing features, implementations must di
 
 \subsection{Methodology}
 
-\todo{diagram?}
+\begin{figure}
+	\includegraphics[width=\textwidth]{images/diags/eval-latency-pipeline}
+	\caption[The Pipeline used in the latency experiment.]{The Pipeline used to measure latency response to Pipeline length.}
+	\label{fig:eval:latency:pipeline-dag}
+\end{figure}
 
-In this experiment, a Pipeline was created in which integer elements were generated uniformly at a rate of \SI{100}{\per\second} and passed through a series of \verb|Map| Transforms, each of which incremented the value.
+
+In this experiment, a Pipeline was created in which integer elements were generated uniformly at a rate of \SI{100}{\per\second} and passed through a series of \verb|Map| Transforms, each of which incremented the value (\cref{fig:eval:latency:pipeline-dag}).
 The latency of each element was measured from the moment of its generation to its output at the last Transform.
 The length of the Pipeline was varied and the effects on element latency analysed.
 CPU and memory usage were also captured at half-second intervals.

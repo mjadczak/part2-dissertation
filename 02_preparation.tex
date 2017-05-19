@@ -133,12 +133,12 @@ In the Dataflow Model, a \emph{Pipeline} is an independent computation.
 It may incorporate many different \emph{Transforms} which pass data to one another, transforming it as it flows through them.
 One can think of Pipelines as Directed Acyclic Graphs (DAGs), with nodes representing Transforms and edges representing data flowing between them~(\cref{fig:prep:pipeline-dags}).
 
-\begin{figure}[t]
+\begin{figure}
 	\subfloat[][A Pipeline can be a simple series of transformations.]{
-	\includegraphics[width=0.3\textwidth]{images/temp/pipeline-dag-basic}
+	\includegraphics[width=0.3\textwidth]{images/diags/pipeline-dag-basic}
 	}
 	\subfloat[][A complex Pipeline can feature branching and Transforms with multiple inputs and outputs and interact with multiple external systems.]{
-	\includegraphics[width=0.7\textwidth]{images/temp/pipeline-dag-complex}
+	\includegraphics[width=0.7\textwidth]{images/diags/pipeline-dag-complex}
 	}
 	\caption[Examples of Pipelines, simple and complex, illustrated as Directed Acyclic Graphs.]{Pipelines are expressed as DAGs and can be simple or complex.}
 	\label{fig:prep:pipeline-dags}
@@ -160,9 +160,9 @@ When the Pipeline is executed, the data flowing between Transforms is made up of
 
 All Transforms can be fundamentally represented using only two primitives: \verb|ParDo| and \verb|GroupByKey|, illustrated in \cref{fig:prep:pardo-gbk}.
 
-\begin{figure}[h]
+\begin{figure}
 	\centering
-	\includegraphics[width=0.6\textwidth]{images/temp/pardo-gbk}
+	\includegraphics[width=0.6\textwidth]{images/diags/pardo-gbk}
 	\caption[An illustration of the operation of \texttt{ParDo} and \texttt{GroupByKey}.]{\texttt{ParDo} and \texttt{GroupByKey} are used as primitives for the construction of other Transforms. \texttt{ParDo} outputs zero or more elements per element, and \texttt{GroupByKey} outputs precisely one element per key in the input Collection.}
 	\label{fig:prep:pardo-gbk}
 \end{figure}
@@ -199,10 +199,10 @@ The processing-time of an element at a Transform is the system clock time at whi
 
 \subsubsection{Windowing in the Dataflow Model}
 
-\begin{figure}[h]
+\begin{figure}
 	\subfloat[][Global windowing assigns all elements to a single, infinite window.
 It is equivalent to no windowing at all.]{
-		\includegraphics[width=0.5\textwidth]{images/temp/window-type-global}
+		\includegraphics[width=0.5\textwidth]{images/diags/window-type-global}
 	}
 	\subfloat[][Fixed windows have a static window size, e.g.\ hourly, and are \emph{aligned}---each window contains all of the data in the system for that period of time.]{
 		\includegraphics[width=0.5\textwidth]{images/temp/window-type-fixed}
@@ -261,16 +261,15 @@ What we can do, however, is introduce a model which allows us to specify the des
 
 \subsubsection{Watermarks}
 
-\todo{Diagram of watermarks?}
-
 A \emph{watermark} is a lower bound in event-time on the timestamps of values which have been processed by the Pipeline (or a particular Transform therein).
 For example, if at a particular instant the watermark is $T$, then we are promised that all events with timestamps earlier than $T$ have been processed.
 A graph of watermark progression against processing time (such as the one in \cref{fig:prep:watermark-progression}) is a useful way to visualise the progress of a Pipeline.
 Further, this concept allows the construction of a powerful model of lateness in the system~(\cref{sec:impl:dataflow:lateness}).
 
-\begin{figure}[h]
-	\includegraphics[width=\textwidth]{images/temp/watermark-progression-example}
-	\caption[An example of a watermark progression plotted against processing-time, showing late data as falling behind the watermark.]{A graph of watermark progression against processing-time shows the progress of a Pipeline. The ideal watermark shows ideal progress---processing each element immediately as it is produced. The local watermark is a heuristic for the true watermark. The element marked (a) was late as it arrived behind the watermark.}
+\begin{figure}
+\centering
+	\includegraphics[width=0.75\textwidth]{images/diags/watermark-progression-example}
+	\caption[An example of a watermark progression plotted against processing-time, showing late data as falling behind the watermark.]{A graph of watermark progression against processing-time shows the progress of a Pipeline. The ideal watermark is an upper bound on progress---processing each element immediately as it is produced. The local watermark is a heuristic for the true watermark. The element marked (a) was late as it arrived behind the watermark.}
 	\label{fig:prep:watermark-progression}
 \end{figure}
 
@@ -288,7 +287,7 @@ To solve these problems, we define a more complex triggering model.
 We explicitly allow data in one window to be emitted multiple times.
 Each such emission is called a \emph{pane} and is marked as \verb|EARLY|, \verb|ON_TIME| or \verb|LATE|, indicating the timeliness of the data which were used to compute it.
 
-Then, define a \emph{trigger} as a Finite State Machine (FSM) which has access to timestamps of elements passing through the Transform, as well as watermarks and other timing information.
+Then, define a \emph{Trigger} as a Finite State Machine (FSM) which has access to timestamps of elements passing through the Transform, as well as watermarks and other timing information.
 This FSM can instruct the Transform to emit a pane of currently buffered data at any time.
 
 In this manner, a variety of behaviours is enabled.
@@ -330,7 +329,7 @@ The process is illustrated in \cref{fig:prep:spiral-model}.
 
 Overall, three or four iterations of prototyping and evaluation were performed, going from a basic proof-of-concept to a working, performant system implementing many features of the Model.
 
-\begin{figure}[h]
+\begin{figure}
 	\centering
 	\includegraphics[width=0.6\textwidth]{images/temp/spiral}
 	\caption{The spiral model of development as used in this project.}

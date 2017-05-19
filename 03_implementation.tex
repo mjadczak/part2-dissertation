@@ -26,7 +26,7 @@ These include checkpointing, serialisation and partitioning of data, and in them
 They are DAGs representing the flow of data through the system as it is transformed.
 
 \begin{figure}[t]
-	\includegraphics[width=\textwidth]{images/temp/composite-example}
+	\includegraphics[width=\textwidth]{images/diags/composite-example}
 	\caption[An illustration of the function of Composite Transforms in a typical Pipeline.]{A typical Pipeline uses Composite Transforms. The large arrows indicate the conceptual data flow path. The user expects to see visualisations or statistics using this abstraction. The thin red edges indicate the actual execution-time data flow---only leaf Transforms are instantiated and exchange data.}
 	\label{fig:impl:composite-transforms}
 \end{figure}
@@ -42,17 +42,17 @@ Data is \emph{added} to a Collection whenever its producing Transform outputs da
 What this means in practice is implementation-dependent---Beam tracks Collections explicitly while the Elixir implementation uses them only to connect Transforms, after which they exchange data directly.
 
 Transforms may be \emph{Primitive} or \emph{Composite}.
-A Primitive Transform is directly executed by the Pipeline runner, while a Composite Transform \emph{expands} into multiple sub-Transforms~(\cref{fig:impl:composite-transforms}).
+A Primitive Transform is directly executed by the Pipeline runner, while a Composite Transform \emph{expands} into multiple sub-Transforms (\cref{fig:impl:composite-transforms}).
 Different runners may choose to implement different Transforms as primitives and provide composite implementations for the rest.
 
 Composite Transforms are tracked for informational purposes (statistics, logging or visualisation), but don't actually get instantiated at execution-time.
 
 As a side effect of the application of a Transform to a Collection, a node representing a particular instance of the Transform is added to the DAG.
-Such a node is called an \emph{Applied Transform}.
+Such a node is called an \emph{Applied~Transform}.
 As well as the parameters of the Transform which was applied, it holds extra information used at execution-time.
 
 When the Pipeline is executed, this Applied Transform will be instantiated into some runtime structure which is responsible for actually performing computation.
-This may be an object in the case of Java or an actor process in the case of Elixir snf id called a \emph{Transform Executor}.
+This may be an object in the case of Java or an actor process in the case of Elixir and is called a \emph{Transform~Executor}.
 
 \subsection{Windows and panes}\label{sec:impl:dataflow:windows-panes}
 
@@ -82,7 +82,7 @@ Theoretically, each Collection has its own true watermark.
 In practice, this is not knowable or even sometimes computable, and so \emph{local watermarks} are used.
 
 \begin{figure}[t]
-	\includegraphics[width=\textwidth]{images/temp/lwm-transform-instantaneous}
+	\includegraphics[width=\textwidth]{images/diags/lwm-transform-instantaneous}
 	\caption{The watermarks of a Transform at a single point in processing-time.}
 	\label{fig:impl:lwm-instantaneous}
 \end{figure}
@@ -112,10 +112,10 @@ To apply it in practice, the correspondence between an element's position with r
 
 \begin{figure}[t]
 	\subfloat[][The knowability of the lateness of an input element with respect to the LIWM.]{
-		\includegraphics[width=\textwidth]{images/temp/lateness-knowability-input}
+		\includegraphics[width=\textwidth]{images/diags/lateness-knowability-input}
 	}\\
 	\subfloat[][The knowability of the lateness of an output element with respect to the LOWM.]{
-		\includegraphics[width=\textwidth]{images/temp/lateness-knowability-output}
+		\includegraphics[width=\textwidth]{images/diags/lateness-knowability-output}
 	}
 	\caption{The lateness of elements with respect to local watermarks can only approximate their lateness with respect to the true watermark.}
 	\label{fig:impl:lateness-knowability}
@@ -278,8 +278,6 @@ For example, when extracting body text from a social post, it makes sense to ass
 We don't need to actually look at the post to make that decision.
 Similarly, a Grouping Transform treats data aggregation and timestamp aggregation orthogonally.
 
-\todo{diagram}
-
 However, in the log-file example above, the timestamp of an individual log entry generated from a file will be dependent on the data of the log entry itself---the recorded time of its generation.
 A guarantee such as `the timestamp of an entry will never be earlier than 24 hours before the timestamp of its file' may exist, but this again is an application-specific decision, unsuitable for inclusion in a generic model.
 
@@ -342,7 +340,7 @@ The number of occurrences of each word is counted, formatted as a string, and ou
 
 \begin{figure}[h]
 	\centering
-	\includegraphics[width=0.2\textwidth]{images/temp/dsl-simple-pipeline}
+	\includegraphics[width=0.2\textwidth]{images/diags/dsl-simple-pipeline}
 	\caption[A simple Pipeline constructed in \cref{lst:impl:elixir-construct-pipeline}.]{\Cref{lst:impl:elixir-construct-pipeline} constructs this simple Pipeline.}
 	\label{fig:impl:dsl-simple-pipeline}
 \end{figure}
@@ -450,7 +448,7 @@ words
 
 \begin{figure}[h]
 	\centering
-	\includegraphics[width=0.6\textwidth]{images/temp/dsl-branching-pipeline}
+	\includegraphics[width=0.6\textwidth]{images/diags/dsl-branching-pipeline}
 	\caption[A branching Pipeline constructed in \cref{lst:impl:diverging-pipelines}.]{\Cref{lst:impl:diverging-pipelines} constructs a branching Pipeline---the result of \texttt{ExtractWords} is consumed by two other Transforms.}
 	\label{fig:impl:dsl-branching-pipeline}
 \end{figure}
@@ -513,8 +511,4 @@ This means that it is possible to arbitrarily add new structures to the DAG, eve
 Therefore, Pipelines in this context are better thought of as processes rather than values.
 However, once the construction of the Pipeline is finished, it is possible to freeze it and turn it into a simple data structure which once again behaves in the expected manner.
 Indeed, the \exs{DirectRunner.run} function does this internally before taking this data structure and executing it.
-
-\subsection{Managing concurrency with OTP}\label{sec:impl:approach:concurrency}
-
-\todo{OTP, DirectRunner, GenServers, Supervisors, GenStage, TimingManager/ReducingEvaluator}
 

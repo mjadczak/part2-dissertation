@@ -1,1 +1,45 @@
 \chapter{Glossary}\label{apx:glossary}
+{\small\tabulinesep=0.5mm
+\begin{longtabu}{rX[p]}
+	\textbf{accumulating mode} & see \textbf{refinement mode}. \\
+	\textbf{add} (to Collection) & when the producer of a Collection emits an element, it is \emph{added} to the Collection. \\
+	\textbf{Applied Transform} & a node in the Pipeline DAG representing a particular instance of a Transform in the computation. \\
+	\textbf{atom} & a type of literal constant in Elixir whose value is its name. Can be compared easily. Denoted \texttt{:name}. \\
+	\textbf{behaviour} & a module which defines a set of callbacks with type signatures. Other modules can adopt the behaviour by implementing the callbacks. Such modules are then usually provided to some executor at runtime. \\
+	\textbf{closed} (of Trigger) & see \textbf{finished}. \\
+	\textbf{Collection} & a description of the data produced by a particular Applied Transform. \\
+	\textbf{Composite Transform} & a Transform which expands into sub-Transforms instead of being executed as a primitive. \\
+	\textbf{discarding mode} & see \textbf{refinement mode}. \\
+	\textbf{done} & a Pipeline (or Transform) is \emph{done} when its watermark is maximal (infinity). \\
+	\textbf{droppable} & an element is \emph{droppable} when it arrives late enough to be dropped silently. \\
+	\textbf{element} & an item in the data stream. Contains data, a timestamp, and an assignment to windows. \\
+	\textbf{Elementwise Transform} & a `flat-map' Transform whose output depend only on its input. \\
+	\textbf{expand} & see \textbf{Composite Transform}. \\
+	\textbf{event-time} & the time domain in which events occur and in which their timestamps are expressed. \\
+	\textbf{finished} & also \emph{closed}. A Trigger is \emph{finished} when it will never fire again. \\
+	\textbf{fire} & a Trigger \emph{fires} when it indicates that a pane of output should be produced. \\
+	\textbf{Grouping Transform} & a Transform which collects its input and partitions it per-key-per-window. It produces output only when triggered. \\
+	\textbf{late} & an element is late if, at the time it is added to its Collection, its timestamp is smaller than the watermark of the Collection. \\
+	\textbf{Local Input Watermark} & a lower bound on the watermarks of all input Collections of a Transform. \\
+	\textbf{Local Output Watermark} & an upper bound on the watermarks of all output Collections of a Transform. \\
+	\textbf{non-late} & an element is \emph{non-late} if it is not \emph{late}. \\
+	\textbf{on-time} & an element is \emph{on-time} if it is \emph{non-late} and also has arrived early enough to be included in the single \texttt{ON\_TIME} pane of output. \\
+	\textbf{pane} & a single batch of output from a Grouping Transform for a single key and window. \\
+	\textbf{Pipeline} & an independent namespace of computation in the Dataflow Model. \\
+	\textbf{Primitive Transform} & a Transform for whose execution the runner has a specific implementation. \\
+	\textbf{process} & in the BEAM, a \emph{process} is a lightweight user-space thread. They are managed by the VM and scheduled transparently across hardware threads. \\
+	\textbf{processing-time} & the time domain of the executing Pipeline. Can be thought of as the wall clock time of the executing machine. \\
+	\textbf{refinement mode} & a setting used when outputting multiple panes for a window. In \emph{accumulating mode}, each pane will have the full set of data seen from the start. Later emissions will be enhanced versions of earlier ones. In \emph{discarding mode}, the data buffer will be cleared on each emission, so each pane will be disjoint in terms of data. \\
+	\textbf{Root Transform} & a Transform which has no input edges in the Pipeline DAG, but which instead gets its data externally. Instantiated by applying directly to the Pipeline. \\
+	\textbf{Source} & a set of functions governing reading, timestamping and watermarking a particular external data source. \\
+	\textbf{Transform} & the basic unit of Computation in the Dataflow Model. Connected into Pipelines to describe computation. \\
+	\textbf{Transform Executor} & the runtime instantiation of a Primitive Transform. \\
+	\textbf{Trigger} & a configurable state machine which governs when a Grouping Transform produces output. \\
+	\textbf{watermark} & a lower bound on element timestamps in the stream. \\
+	\textbf{watermark domain} & a set of Transforms whose watermarks can be thought of as belonging to the same semantic domain. \\
+	\textbf{watermark hold} & a Transform can \emph{hold} its output watermark to prevent it from advancing with the input watermark if it knows it may need to emit some data at a later stage. \\
+	\textbf{window} & a meta-value by which all computation in Grouping Transforms is partitioned. Usually a time-interval value. \\
+	\textbf{windowing function} & a pair of functions which manage the conversion of element timestamps into sets of windows. \\
+	\textbf{windowing strategy} & a property of a Collection which specifies the windowing function as well as other metadata.
+\end{longtabu}
+}
