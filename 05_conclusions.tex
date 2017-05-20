@@ -13,7 +13,7 @@ The implementation was evaluated, and though it was built with the aim of functi
 It was able to sustain a sub-\SI{10}{\milli\second} median latency when passing a busy (\SI{100}{\per\second}) stream of elements through a \num{2000}-Transform Pipeline (\cref{sec:eval:latency}).
 
 Its suitability for real-world scenarios was shown by its performance while processing a large stream of tweets to produce hashtag autocomplete suggestions.
-Replication techniques were employed to show that Elixir Dataflow can compute hashtag autocomplete suggestions on streams of up to \num{25000} tweets per second---a throughput which would allow it to process the entire Twitter Firehose ($\sim$\num{7000} tweets per second) three times over~(\cref{sec:eval:twitter:throughput}).
+Replication techniques were employed to show that Elixir Dataflow can compute hashtag autocomplete suggestions on streams of up to \num{25000} tweets per second---a throughput which would allow it to process all tweets on Twitter ($\sim$\num{7000} tweets per second) three times over~(\cref{sec:eval:twitter:throughput}).
 
 The developer-friendliness of the resultant system was also demonstrated, with a real-world example requiring over \num6$\times$ less code to implement than Java~(\cref{sec:eval:twitter:code}).
 The paradigms and conventions of the Elixir ecosystem are a great match for the concepts of the Model (\cref{sec:impl:approach:dsl}).

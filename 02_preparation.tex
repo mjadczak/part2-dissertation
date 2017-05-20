@@ -205,19 +205,19 @@ It is equivalent to no windowing at all.]{
 		\includegraphics[width=0.5\textwidth]{images/diags/window-type-global}
 	}
 	\subfloat[][Fixed windows have a static window size, e.g.\ hourly, and are \emph{aligned}---each window contains all of the data in the system for that period of time.]{
-		\includegraphics[width=0.5\textwidth]{images/temp/window-type-fixed}
+		\includegraphics[width=0.5\textwidth]{images/diags/window-type-fixed}
 	}\\
 	\subfloat[][Sliding windows have a static window size and slide period, e.g.\ hourly windows which start every 10 minutes.
 The windows may overlap, which requires the system to be able to place a single piece of data in multiple windows.
 The windows are still aligned.]{
-		\includegraphics[width=0.5\textwidth]{images/temp/window-type-sliding}
+		\includegraphics[width=0.5\textwidth]{images/diags/window-type-sliding}
 	}
 	\subfloat[][Sessions are windows which capture some period of activity over a subset of the data.
 They are typically specified using a timeout after which a new session starts.
 Any events closer in time than that form a session.
 These windows need to be able to merge as new data is added between them.
 They are also unaligned---certain windows apply only to a subset of the data.]{
-		\includegraphics[width=0.5\textwidth]{images/temp/window-type-sessions}
+		\includegraphics[width=0.5\textwidth]{images/diags/window-type-sessions}
 	}
 	\caption{Four windowing paradigms, all supported by the Dataflow Model.}
 	\label{fig:prep:window-types}
@@ -243,7 +243,7 @@ This is used in cases like session windowing~(\cref{fig:prep:sessions-merge}).
 Most windowing strategies do not need to merge windows.
 
 \begin{figure}[h]
-	\includegraphics[width=\textwidth]{images/temp/sessions-assign-merge}
+	\includegraphics[width=\textwidth]{images/diags/sessions-assign-merge}
 	\caption[A \texttt{WindowFn} is used to place elements into session-based, unaligned windows.]
 	{The sessions \texttt{WindowFn} is used to assign elements over two separate keys into session-based windows. The \texttt{assign} operation puts each element in each key into its own 20 minute-long window. The \texttt{merge} operation takes any overlapping windows and merges them into a larger window spanning all original windows.}
 	\label{fig:prep:sessions-merge}

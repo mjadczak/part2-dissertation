@@ -301,9 +301,7 @@ Instead, its possible effect on the lateness of data is considered as soon as th
 This solution also potentially simplifies the original approach to Sources by allowing for decoupling of logic.
 An example of this can be seen in one of the Evaluation examples~(\cref{sec:eval:twitter:code}).
 
-\section{The Dataflow Model implemented}\label{sec:impl:approach}
-
-\subsection{The Dataflow DSL}\label{sec:impl:approach:dsl}
+\section{The Dataflow DSL}\label{sec:impl:approach}\label{sec:impl:approach:dsl}
 
 The design of a usable, intuitive Domain Specific Language (DSL) for constructing Pipelines was an important component of this project, and one of its original goals.
 
@@ -364,7 +362,7 @@ input
 \Cref{lst:impl:elixir-normal-comparison} shows an implementation of the same computation using Elixir standard library functions.
 It demonstrates how closely the Dataflow Pipeline abstraction maps to existing paradigms in Elixir.
 
-\subsubsection{Using macros}
+\subsection{Using macros}
 
 In Elixir, \exs{--} is the list difference operator.
 While it is possible to redefine the \exs{--} operator as one used for labelling Transforms, it would likely cause confusion.
@@ -451,7 +449,7 @@ words
 	\label{fig:impl:dsl-branching-pipeline}
 \end{figure}
 
-\subsubsection{Structs and protocols}
+\subsection{Structs and protocols}
 
 Since there is a need to separate the construction and execution phases of the computation, a different approach is needed than in \cref{lst:impl:elixir-normal-comparison}, where on passing a value to a `transformation', the function is executed immediately.
 Instead, the description of the computation must be stored in the Pipeline structure.
@@ -497,7 +495,7 @@ Primitive Transforms are not definable by the user and receive special treatment
 \end{codelisting}
 
 
-\subsubsection{Managing DAGs using asynchronous processes}
+\subsection{Managing DAGs using asynchronous processes}
 
 Constructing and working with DAGs directly in a functional language is possible~\cite{Gibbons1995} but difficult, especially when advanced functional features such as those found in e.g.\ Haskell are not available.
 Instead of attempting to do this, the concurrency model of Elixir was leveraged to simulate a mutable map of Collections and Applied Transforms inside the Pipeline structure.
